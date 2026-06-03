@@ -6,31 +6,42 @@
   <title>Login NFC · Demo</title>
   <!--
     ============================================================================
-    DEMO de login por NFC usando Web NFC (NDEFReader).
+    DEMO de login por NFC. Soporta DOS fuentes de lectura del UID:
+
+      A) Web NFC (NDEFReader)  -> teléfonos/tablets con Chrome para ANDROID
+                                  y chip NFC integrado.
+      B) Lector USB "teclado"  -> para PANTALLAS INTERACTIVAS y PCs.
+         (keyboard wedge / HID emulation)
+
+    ----------------------------------------------------------------------------
+    ¿POR QUÉ DOS MODOS?
+    Web NFC (NDEFReader) SOLO existe en Chrome/Chromium para Android con NFC
+    integrado. En Windows / ChromeOS / pantallas interactivas el navegador NO
+    expone NDEFReader, aunque haya un lector NFC conectado. Por eso ahí aparece
+    "NFC no soportado".
+
+    En esos equipos lo normal es conectar un LECTOR USB que funciona como
+    EMULADOR DE TECLADO (keyboard wedge): al acercar la tarjeta "tipea" el UID
+    y manda Enter, escribiéndolo en el campo que tenga el foco. No necesita
+    Web NFC ni drivers. Modelos típicos: JustID, ACR1281U-C2, R80UF, ACR122U
+    (en modo keyboard emulation), etc.
+
+    El modo "Lector USB (teclado)" de esta demo captura justamente eso.
     ----------------------------------------------------------------------------
     IMPORTANTE: Es SOLO una demo. La "cuenta" y la "sesión" se simulan con
     localStorage. NO hay backend real.
 
     >>> DÓNDE CONECTAR SUPABASE MÁS ADELANTE <<<
-    Buscá en este archivo los comentarios marcados con "TODO SUPABASE".
-    Ahí es donde se reemplazarían las operaciones de localStorage por
-    llamadas reales, por ejemplo:
+    Buscá los comentarios "TODO SUPABASE": getCards / saveCard / lookupCard /
+    startSession / logout encapsulan TODO el acceso a datos. Reemplazá su
+    cuerpo por consultas reales, p.ej.:
         const { data } = await supabase
-          .from('tarjetas')
-          .select('usuario')
-          .eq('uid', uid)
-          .single();
+          .from('tarjetas').select('usuario').eq('uid', uid).single();
     ----------------------------------------------------------------------------
-    REQUISITOS PARA QUE FUNCIONE:
-      - Chrome en Android (Web NFC no existe en iOS ni en desktop).
-      - La página debe servirse por HTTPS (o http://localhost).
-
-    CÓMO PROBARLO:
-      1. GitHub Pages: subí este index.html a un repo y activá Pages.
-         Te queda una URL https://usuario.github.io/repo/ lista para usar.
-      2. Túnel a tu máquina local: `npx serve` + `ngrok http 3000`
-         (o `cloudflared tunnel --url http://localhost:3000`) y abrís la
-         URL https que te devuelve el túnel desde el celular.
+    CÓMO PROBARLO POR HTTPS (Web NFC exige HTTPS; el modo USB no, pero conviene):
+      1. GitHub Pages: subí index.html y activá Pages -> URL https lista.
+      2. Túnel local: `npx serve` + `ngrok http 3000`
+         (o `cloudflared tunnel --url http://localhost:3000`).
     ============================================================================
   -->
   <style>
@@ -45,161 +56,83 @@
     }
     * { box-sizing: border-box; }
     html, body {
-      margin: 0;
-      padding: 0;
-      background: var(--bg);
-      color: var(--text);
+      margin: 0; padding: 0;
+      background: var(--bg); color: var(--text);
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       min-height: 100%;
     }
-    body {
-      display: flex;
-      justify-content: center;
-      padding: 24px 16px 48px;
-    }
-    .wrap {
-      width: 100%;
-      max-width: 520px;
-    }
-    h1 {
-      font-size: 1.8rem;
-      text-align: center;
-      margin: 8px 0 4px;
-    }
-    .subtitle {
-      text-align: center;
-      color: var(--muted);
-      margin: 0 0 24px;
-      font-size: 1rem;
-    }
+    body { display: flex; justify-content: center; padding: 24px 16px 48px; }
+    .wrap { width: 100%; max-width: 560px; }
+    h1 { font-size: 1.9rem; text-align: center; margin: 8px 0 4px; }
+    .subtitle { text-align: center; color: var(--muted); margin: 0 0 20px; font-size: 1rem; }
     .card {
-      background: var(--card);
-      border-radius: 18px;
-      padding: 22px;
-      margin-bottom: 20px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      background: var(--card); border-radius: 18px; padding: 22px;
+      margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.35);
     }
-    .card h2 {
-      margin: 0 0 16px;
-      font-size: 1.3rem;
-    }
-    label {
-      display: block;
-      font-size: 1rem;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
+    .card h2 { margin: 0 0 16px; font-size: 1.3rem; }
+    label { display: block; font-size: 1rem; color: var(--muted); margin-bottom: 8px; }
     input[type="text"] {
-      width: 100%;
-      padding: 16px;
-      font-size: 1.15rem;
-      border-radius: 12px;
-      border: 2px solid #334155;
-      background: #0b1220;
-      color: var(--text);
+      width: 100%; padding: 16px; font-size: 1.15rem; border-radius: 12px;
+      border: 2px solid #334155; background: #0b1220; color: var(--text);
       margin-bottom: 16px;
     }
-    input[type="text"]:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
+    input[type="text"]:focus { outline: none; border-color: var(--accent); }
     button {
-      width: 100%;
-      padding: 18px;
-      font-size: 1.2rem;
-      font-weight: 600;
-      border: none;
-      border-radius: 14px;
-      cursor: pointer;
-      color: #04121f;
-      background: var(--accent);
-      transition: transform 0.05s ease, filter 0.15s ease;
+      width: 100%; padding: 18px; font-size: 1.2rem; font-weight: 600;
+      border: none; border-radius: 14px; cursor: pointer; color: #04121f;
+      background: var(--accent); transition: transform 0.05s ease, filter 0.15s ease;
       -webkit-tap-highlight-color: transparent;
     }
     button:active { transform: scale(0.98); }
     button:hover { filter: brightness(1.05); }
-    button.secondary {
-      background: #334155;
-      color: var(--text);
-    }
+    button.secondary { background: #334155; color: var(--text); }
     button.success { background: var(--accent-2); }
     button.danger { background: var(--danger); color: #fff; }
     button + button { margin-top: 12px; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Selector de modo de lectura */
+    .modes { display: flex; gap: 10px; margin-bottom: 18px; }
+    .modes .mode {
+      flex: 1; padding: 14px 10px; border-radius: 12px; text-align: center;
+      background: #0b1220; border: 2px solid #334155; cursor: pointer;
+      font-size: 0.98rem; line-height: 1.25; transition: all 0.12s ease;
+    }
+    .modes .mode small { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 4px; }
+    .modes .mode.active { border-color: var(--accent); background: #0b2942; }
+    .modes .mode.disabled { opacity: 0.45; cursor: not-allowed; }
 
     .uid-box {
-      margin-top: 16px;
-      padding: 14px;
-      border-radius: 12px;
-      background: #0b1220;
-      border: 1px dashed #334155;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 1.05rem;
-      word-break: break-all;
-      color: var(--accent);
+      margin-top: 16px; padding: 14px; border-radius: 12px; background: #0b1220;
+      border: 1px dashed #334155; font-family: ui-monospace, Menlo, monospace;
+      font-size: 1.05rem; word-break: break-all; color: var(--accent);
     }
     .uid-box .lbl { color: var(--muted); font-size: 0.8rem; display: block; }
 
-    .msg {
-      margin-top: 16px;
-      padding: 14px 16px;
-      border-radius: 12px;
-      font-size: 1.05rem;
-      line-height: 1.4;
-    }
-    .msg.info    { background: #0b2942; color: #bae6fd; }
-    .msg.ok      { background: #052e16; color: #bbf7d0; }
-    .msg.error   { background: #450a0a; color: #fecaca; }
-    .msg.warn    { background: #422006; color: #fed7aa; }
+    .msg { margin-top: 16px; padding: 14px 16px; border-radius: 12px; font-size: 1.05rem; line-height: 1.4; }
+    .msg.info { background: #0b2942; color: #bae6fd; }
+    .msg.ok { background: #052e16; color: #bbf7d0; }
+    .msg.error { background: #450a0a; color: #fecaca; }
+    .msg.warn { background: #422006; color: #fed7aa; }
     .hidden { display: none !important; }
 
-    .scanning {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--accent);
-      font-size: 1.05rem;
-      margin-top: 14px;
-    }
-    .pulse {
-      width: 14px; height: 14px; border-radius: 50%;
-      background: var(--accent);
-      animation: pulse 1s infinite;
-    }
-    @keyframes pulse {
-      0%   { transform: scale(1);   opacity: 1; }
-      50%  { transform: scale(1.6); opacity: 0.4; }
-      100% { transform: scale(1);   opacity: 1; }
-    }
+    .scanning { display: flex; align-items: center; gap: 10px; color: var(--accent); font-size: 1.05rem; margin-top: 14px; }
+    .pulse { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%{transform:scale(1);opacity:1} 50%{transform:scale(1.6);opacity:.4} 100%{transform:scale(1);opacity:1} }
 
-    .session-card {
-      text-align: center;
-    }
+    .session-card { text-align: center; }
     .session-card .avatar {
-      width: 90px; height: 90px;
-      border-radius: 50%;
-      background: var(--accent-2);
-      color: #04121f;
-      font-size: 2.6rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
+      width: 90px; height: 90px; border-radius: 50%; background: var(--accent-2);
+      color: #04121f; font-size: 2.6rem; font-weight: 700; display: flex;
+      align-items: center; justify-content: center; margin: 0 auto 16px;
     }
     .session-card .name { font-size: 1.6rem; font-weight: 700; }
-    .footer {
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.85rem;
-      margin-top: 12px;
-    }
-    .registered {
-      margin-top: 16px;
-      font-size: 0.9rem;
-      color: var(--muted);
-    }
+    .footer { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 12px; }
+    .registered { margin-top: 16px; font-size: 0.9rem; color: var(--muted); }
     .registered ul { margin: 6px 0 0; padding-left: 20px; }
     .registered code { color: var(--accent); }
+    /* input invisible donde "tipea" el lector USB */
+    .wedge-capture { position: absolute; left: -9999px; top: 0; opacity: 0; }
   </style>
 </head>
 <body>
@@ -207,15 +140,20 @@
     <h1>🔓 Login NFC</h1>
     <p class="subtitle">Demo de inicio de sesión con tarjeta NFC</p>
 
-    <!-- Aviso de compatibilidad (se muestra si NO hay soporte de Web NFC) -->
-    <div id="noSupport" class="card hidden">
-      <div class="msg error">
-        <strong>Web NFC no disponible.</strong><br />
-        Esta demo necesita <strong>Chrome en Android</strong> y la página debe
-        abrirse por <strong>HTTPS</strong> (o desde <code>localhost</code>).
-        <br /><br />
-        Si estás en una computadora o en iPhone, no vas a poder leer tags NFC.
+    <!-- ============= Selector de modo de lectura ============= -->
+    <div class="card">
+      <h2>Modo de lectura</h2>
+      <div class="modes">
+        <div class="mode" id="modeNfc" data-mode="nfc">
+          📱 Web NFC
+          <small>Chrome en Android con chip NFC</small>
+        </div>
+        <div class="mode" id="modeUsb" data-mode="usb">
+          🖥️ Lector USB (teclado)
+          <small>Pantallas interactivas y PC</small>
+        </div>
       </div>
+      <div id="modeHint" class="msg info"></div>
     </div>
 
     <!-- ====================== VISTA: NO logueado ====================== -->
@@ -225,11 +163,10 @@
       <div class="card">
         <h2>1 · Asociar tarjeta</h2>
         <label for="username">Nombre de usuario</label>
-        <input type="text" id="username" placeholder="Ej: María González"
-               autocomplete="off" />
+        <input type="text" id="username" placeholder="Ej: María González" autocomplete="off" />
         <button id="enrollBtn">📇 Asociar tarjeta a mi cuenta</button>
         <div id="enrollScanning" class="scanning hidden">
-          <span class="pulse"></span> Acercá la tarjeta NFC al teléfono…
+          <span class="pulse"></span> <span id="enrollScanTxt">Acercá la tarjeta…</span>
         </div>
         <div id="enrollMsg"></div>
       </div>
@@ -239,12 +176,12 @@
         <h2>2 · Iniciar sesión</h2>
         <button id="loginBtn" class="success">🔑 Iniciar sesión con NFC</button>
         <div id="loginScanning" class="scanning hidden">
-          <span class="pulse"></span> Acercá tu tarjeta para entrar…
+          <span class="pulse"></span> <span id="loginScanTxt">Acercá tu tarjeta…</span>
         </div>
         <div id="loginMsg"></div>
       </div>
 
-      <!-- UID leído (depuración) -->
+      <!-- Depuración -->
       <div class="card">
         <h2>🐞 Depuración</h2>
         <div class="uid-box">
@@ -253,7 +190,6 @@
         </div>
         <div id="registered" class="registered"></div>
       </div>
-
     </div>
 
     <!-- ====================== VISTA: sesión iniciada ====================== -->
@@ -266,14 +202,16 @@
           <span class="lbl">UID de la tarjeta</span>
           <span id="sessionUid">—</span>
         </div>
-        <button id="logoutBtn" class="danger" style="margin-top:18px;">
-          Cerrar sesión
-        </button>
+        <button id="logoutBtn" class="danger" style="margin-top:18px;">Cerrar sesión</button>
       </div>
     </div>
 
     <p class="footer">DEMO · los datos se guardan solo en este navegador (localStorage)</p>
   </div>
+
+  <!-- Input oculto: el lector USB (keyboard wedge) "tipea" el UID acá -->
+  <input type="text" id="wedge" class="wedge-capture" autocomplete="off"
+         inputmode="none" aria-hidden="true" />
 
   <script>
     "use strict";
@@ -281,211 +219,230 @@
     // ======================================================================
     // Claves de almacenamiento
     // ======================================================================
-    const STORE_KEY   = "nfc_demo_cards";    // { uid: nombreUsuario }
-    const SESSION_KEY = "nfc_demo_session";   // { uid, nombre }
+    const STORE_KEY   = "nfc_demo_cards";   // { uid: nombreUsuario }
+    const SESSION_KEY = "nfc_demo_session";  // { uid, nombre }
 
-    // ----- Helpers de "base de datos" simulada -----------------------------
-    // TODO SUPABASE: estas tres funciones encapsulan TODO el acceso a datos.
-    // Cuando conectes Supabase, reemplazá el cuerpo de cada una por consultas
-    // a la tabla correspondiente (p.ej. tabla `tarjetas` con columnas
-    // uid + usuario) y volvelas async.
-
+    // ----- "Base de datos" simulada ---------------------------------------
+    // TODO SUPABASE: estas funciones encapsulan TODO el acceso a datos.
     function getCards() {
-      try {
-        return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
-      } catch (e) {
-        return {};
-      }
+      try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+      catch (e) { return {}; }
     }
-
     function saveCard(uid, nombre) {
-      // TODO SUPABASE: aquí iría un INSERT/UPSERT en la tabla `tarjetas`.
-      const cards = getCards();
-      cards[uid] = nombre;
+      // TODO SUPABASE: INSERT/UPSERT en tabla `tarjetas`.
+      const cards = getCards(); cards[uid] = nombre;
       localStorage.setItem(STORE_KEY, JSON.stringify(cards));
     }
-
     function lookupCard(uid) {
-      // TODO SUPABASE: aquí iría un SELECT ... WHERE uid = :uid.
-      const cards = getCards();
-      return cards[uid] || null;
+      // TODO SUPABASE: SELECT ... WHERE uid = :uid.
+      return getCards()[uid] || null;
     }
 
     // ======================================================================
-    // Referencias al DOM
+    // DOM
     // ======================================================================
     const $ = (id) => document.getElementById(id);
-
-    const noSupport     = $("noSupport");
-    const loggedOutView = $("loggedOutView");
-    const loggedInView  = $("loggedInView");
-
+    const loggedOutView = $("loggedOutView"), loggedInView = $("loggedInView");
     const usernameInput = $("username");
-    const enrollBtn     = $("enrollBtn");
-    const enrollScanning= $("enrollScanning");
-    const enrollMsg     = $("enrollMsg");
+    const enrollBtn = $("enrollBtn"), enrollScanning = $("enrollScanning"),
+          enrollScanTxt = $("enrollScanTxt"), enrollMsg = $("enrollMsg");
+    const loginBtn = $("loginBtn"), loginScanning = $("loginScanning"),
+          loginScanTxt = $("loginScanTxt"), loginMsg = $("loginMsg");
+    const lastUid = $("lastUid"), registered = $("registered");
+    const logoutBtn = $("logoutBtn"), sessionName = $("sessionName"),
+          sessionUid = $("sessionUid"), avatar = $("avatar");
+    const modeNfc = $("modeNfc"), modeUsb = $("modeUsb"), modeHint = $("modeHint");
+    const wedge = $("wedge");
 
-    const loginBtn      = $("loginBtn");
-    const loginScanning = $("loginScanning");
-    const loginMsg      = $("loginMsg");
-
-    const lastUid       = $("lastUid");
-    const registered    = $("registered");
-
-    const logoutBtn     = $("logoutBtn");
-    const sessionName   = $("sessionName");
-    const sessionUid    = $("sessionUid");
-    const avatar        = $("avatar");
-
-    // ======================================================================
-    // Utilidades de UI
-    // ======================================================================
-    function showMsg(el, text, type) {
-      el.className = "msg " + type;
-      el.innerHTML = text;
-    }
-    function clearMsg(el) {
-      el.className = "";
-      el.innerHTML = "";
-    }
+    function showMsg(el, text, type) { el.className = "msg " + type; el.innerHTML = text; }
+    function clearMsg(el) { el.className = ""; el.innerHTML = ""; }
 
     function renderRegistered() {
-      const cards = getCards();
-      const uids = Object.keys(cards);
-      if (uids.length === 0) {
-        registered.innerHTML = "<em>No hay tarjetas registradas todavía.</em>";
-        return;
-      }
-      let html = "Tarjetas registradas:<ul>";
-      for (const uid of uids) {
-        html += `<li><code>${uid}</code> → ${cards[uid]}</li>`;
-      }
-      html += "</ul>";
-      registered.innerHTML = html;
+      const cards = getCards(), uids = Object.keys(cards);
+      if (!uids.length) { registered.innerHTML = "<em>No hay tarjetas registradas todavía.</em>"; return; }
+      registered.innerHTML = "Tarjetas registradas:<ul>" +
+        uids.map(u => `<li><code>${u}</code> → ${cards[u]}</li>`).join("") + "</ul>";
     }
 
     // ======================================================================
-    // Detección de soporte de Web NFC
+    // Modo de lectura: "nfc" (Web NFC) o "usb" (lector teclado)
     // ======================================================================
     const nfcSupported = ("NDEFReader" in window);
-    if (!nfcSupported) {
-      noSupport.classList.remove("hidden");
+    let mode = nfcSupported ? "nfc" : "usb"; // si no hay Web NFC, default USB
+
+    function setMode(m) {
+      // No permitir Web NFC si no está soportado
+      if (m === "nfc" && !nfcSupported) return;
+      mode = m;
+      modeNfc.classList.toggle("active", m === "nfc");
+      modeUsb.classList.toggle("active", m === "usb");
+      if (m === "nfc") {
+        modeNfc.classList.remove("disabled");
+        modeHint.className = "msg info";
+        modeHint.innerHTML = "📱 <strong>Web NFC</strong>: acercá la tarjeta al teléfono. Requiere Chrome en Android y HTTPS.";
+      } else {
+        modeHint.className = "msg info";
+        modeHint.innerHTML = "🖥️ <strong>Lector USB</strong>: conectá un lector NFC con emulación de teclado, tocá el botón y acercá la tarjeta. Funciona en pantallas interactivas y PC.";
+      }
+      // Actualizar textos de los botones según el modo
+      stopCapture();
     }
 
+    if (!nfcSupported) {
+      modeNfc.classList.add("disabled");
+      modeNfc.querySelector("small").textContent = "No disponible en este equipo";
+    }
+    modeNfc.addEventListener("click", () => {
+      if (!nfcSupported) {
+        modeHint.className = "msg warn";
+        modeHint.innerHTML = "⚠️ Web NFC no está disponible en este navegador/equipo. Usá <strong>Lector USB (teclado)</strong>.";
+        return;
+      }
+      setMode("nfc");
+    });
+    modeUsb.addEventListener("click", () => setMode("usb"));
+
     // ======================================================================
-    // Lectura NFC
+    // Captura de UID (abstrae las dos fuentes)
     // ----------------------------------------------------------------------
-    // IMPORTANTE: el scan() SIEMPRE se dispara desde un clic del usuario,
-    // nunca automáticamente al cargar la página.
-    //
-    // Usamos un único reader y un "modo" para saber qué hacer cuando llega
-    // una lectura (enrolar vs iniciar sesión).
+    // El scan() de Web NFC y el foco del lector USB SIEMPRE arrancan tras un
+    // clic del usuario (gesto), nunca automáticamente al cargar.
     // ======================================================================
-    let reader = null;
-    let scanStarted = false;
-    let pendingMode = null; // "enroll" | "login"
+    let reader = null;          // NDEFReader (Web NFC)
+    let nfcScanStarted = false;
+    let activeAction = null;    // "enroll" | "login" | null
+    let wedgeBuffer = "";
+    let wedgeTimer = null;
 
-    async function startScan(mode) {
-      if (!nfcSupported) return;
-      pendingMode = mode;
+    function uiScanning(action, on, txt) {
+      const box = action === "enroll" ? enrollScanning : loginScanning;
+      const span = action === "enroll" ? enrollScanTxt : loginScanTxt;
+      box.classList.toggle("hidden", !on);
+      if (txt) span.textContent = txt;
+    }
 
-      // Feedback visual
-      if (mode === "enroll") {
-        clearMsg(enrollMsg);
-        enrollScanning.classList.remove("hidden");
-        loginScanning.classList.add("hidden");
-      } else {
-        clearMsg(loginMsg);
-        loginScanning.classList.remove("hidden");
-        enrollScanning.classList.add("hidden");
+    function stopCapture() {
+      activeAction = null;
+      wedgeBuffer = "";
+      enrollScanning.classList.add("hidden");
+      loginScanning.classList.add("hidden");
+    }
+
+    // Recibe el UID desde cualquier fuente y despacha a la acción activa.
+    function onUid(uid) {
+      uid = (uid || "").trim();
+      if (!uid) return;
+      lastUid.textContent = uid;
+      const action = activeAction;
+      stopCapture();
+      if (action === "enroll") handleEnroll(uid);
+      else if (action === "login") handleLogin(uid);
+    }
+
+    // ---- Iniciar captura para una acción ----
+    async function startCapture(action) {
+      activeAction = action;
+      const otherMsg = action === "enroll" ? loginMsg : enrollMsg;
+      clearMsg(action === "enroll" ? enrollMsg : loginMsg);
+
+      if (mode === "usb") {
+        // MODO LECTOR USB (keyboard wedge): enfocamos el input oculto para
+        // que el lector "tipee" ahí el UID. Termina en Enter.
+        uiScanning(action, true, "Acercá la tarjeta al lector USB…");
+        wedgeBuffer = "";
+        wedge.value = "";
+        wedge.focus();
+        return;
       }
 
+      // MODO WEB NFC
+      uiScanning(action, true, "Acercá la tarjeta al teléfono…");
       try {
         if (!reader) {
           reader = new NDEFReader();
-
-          // Manejo de cada lectura de tag
-          reader.onreading = (event) => {
-            const uid = event.serialNumber || "(sin UID)";
-            lastUid.textContent = uid;
-
-            if (pendingMode === "enroll") {
-              handleEnroll(uid);
-            } else if (pendingMode === "login") {
-              handleLogin(uid);
-            }
-          };
-
+          reader.onreading = (event) => onUid(event.serialNumber || "(sin UID)");
           reader.onreadingerror = () => {
-            const target = pendingMode === "enroll" ? enrollMsg : loginMsg;
-            showMsg(target, "No se pudo leer la tarjeta. Probá de nuevo.", "error");
+            const t = activeAction === "enroll" ? enrollMsg : loginMsg;
+            if (t) showMsg(t, "No se pudo leer la tarjeta. Probá de nuevo.", "error");
           };
         }
-
-        if (!scanStarted) {
+        if (!nfcScanStarted) {
           await reader.scan(); // requiere gesto del usuario + HTTPS
-          scanStarted = true;
+          nfcScanStarted = true;
         }
       } catch (err) {
-        enrollScanning.classList.add("hidden");
-        loginScanning.classList.add("hidden");
-        const target = mode === "enroll" ? enrollMsg : loginMsg;
-        showMsg(target,
-          "❌ Error al iniciar la lectura NFC: " + (err && err.message ? err.message : err),
-          "error");
+        stopCapture();
+        const t = action === "enroll" ? enrollMsg : loginMsg;
+        showMsg(t, "❌ Error al iniciar la lectura NFC: " +
+          (err && err.message ? err.message : err) +
+          "<br />Si estás en una pantalla interactiva o PC, cambiá a <strong>Lector USB (teclado)</strong>.", "error");
       }
     }
 
-    // ----- Acción: ENROLAR -------------------------------------------------
+    // ---- Keyboard wedge: capturar lo que tipea el lector USB ----
+    // Los lectores HID escriben rápido y terminan con Enter. Acumulamos
+    // caracteres y, al recibir Enter (o tras una pausa), entregamos el UID.
+    wedge.addEventListener("keydown", (e) => {
+      if (activeAction === null || mode !== "usb") return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const uid = wedgeBuffer || wedge.value;
+        wedgeBuffer = ""; wedge.value = "";
+        if (uid.trim()) onUid(uid);
+      } else if (e.key.length === 1) {
+        wedgeBuffer += e.key;
+        // Respaldo: si el lector no manda Enter, cerramos tras 120ms sin teclas.
+        clearTimeout(wedgeTimer);
+        wedgeTimer = setTimeout(() => {
+          if (activeAction && wedgeBuffer.trim()) {
+            const uid = wedgeBuffer; wedgeBuffer = ""; wedge.value = "";
+            onUid(uid);
+          }
+        }, 120);
+      }
+    });
+    // Si el wedge pierde el foco mientras escaneamos en modo USB, lo recuperamos.
+    wedge.addEventListener("blur", () => {
+      if (activeAction !== null && mode === "usb") setTimeout(() => wedge.focus(), 0);
+    });
+
+    // ======================================================================
+    // Acciones
+    // ======================================================================
     function handleEnroll(uid) {
-      enrollScanning.classList.add("hidden");
       const nombre = usernameInput.value.trim();
       if (!nombre) {
         showMsg(enrollMsg, "⚠️ Escribí un nombre de usuario antes de asociar la tarjeta.", "warn");
         return;
       }
       saveCard(uid, nombre);
-      showMsg(enrollMsg,
-        `✅ Tarjeta <code>${uid}</code> asociada a <strong>${nombre}</strong>.`,
-        "ok");
+      showMsg(enrollMsg, `✅ Tarjeta <code>${uid}</code> asociada a <strong>${nombre}</strong>.`, "ok");
       usernameInput.value = "";
       renderRegistered();
     }
 
-    // ----- Acción: INICIAR SESIÓN -----------------------------------------
     function handleLogin(uid) {
-      loginScanning.classList.add("hidden");
       const nombre = lookupCard(uid);
-      if (nombre) {
-        startSession(uid, nombre);
-      } else {
-        showMsg(loginMsg,
-          `🚫 Tarjeta <code>${uid}</code> no registrada.<br />` +
-          `Asociala primero en el paso 1.`,
-          "error");
-      }
+      if (nombre) startSession(uid, nombre);
+      else showMsg(loginMsg,
+        `🚫 Tarjeta <code>${uid}</code> no registrada.<br />Asociala primero en el paso 1.`, "error");
     }
 
     // ======================================================================
     // Sesión simulada
     // ======================================================================
     function startSession(uid, nombre) {
-      // TODO SUPABASE: en producción acá crearías la sesión real
-      // (p.ej. supabase.auth o un token propio) en vez de localStorage.
+      // TODO SUPABASE: crear sesión real (supabase.auth / token propio).
       localStorage.setItem(SESSION_KEY, JSON.stringify({ uid, nombre }));
       renderSession();
     }
-
     function renderSession() {
-      let session = null;
-      try {
-        session = JSON.parse(localStorage.getItem(SESSION_KEY));
-      } catch (e) { session = null; }
-
-      if (session && session.nombre) {
-        sessionName.textContent = session.nombre;
-        sessionUid.textContent  = session.uid;
-        avatar.textContent = session.nombre.trim().charAt(0).toUpperCase() || "?";
+      let s = null;
+      try { s = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) {}
+      if (s && s.nombre) {
+        sessionName.textContent = s.nombre;
+        sessionUid.textContent = s.uid;
+        avatar.textContent = (s.nombre.trim().charAt(0) || "?").toUpperCase();
         loggedOutView.classList.add("hidden");
         loggedInView.classList.remove("hidden");
       } else {
@@ -493,39 +450,25 @@
         loggedOutView.classList.remove("hidden");
       }
     }
-
     function logout() {
-      // TODO SUPABASE: acá iría supabase.auth.signOut() o equivalente.
+      // TODO SUPABASE: supabase.auth.signOut().
       localStorage.removeItem(SESSION_KEY);
       renderSession();
     }
 
     // ======================================================================
-    // Eventos (todos los scan() arrancan desde un clic)
+    // Eventos de botones (todo arranca desde un clic)
     // ======================================================================
-    enrollBtn.addEventListener("click", () => {
-      if (!nfcSupported) {
-        showMsg(enrollMsg, "Web NFC no está disponible en este dispositivo.", "error");
-        return;
-      }
-      startScan("enroll");
-    });
-
-    loginBtn.addEventListener("click", () => {
-      if (!nfcSupported) {
-        showMsg(loginMsg, "Web NFC no está disponible en este dispositivo.", "error");
-        return;
-      }
-      startScan("login");
-    });
-
+    enrollBtn.addEventListener("click", () => startCapture("enroll"));
+    loginBtn.addEventListener("click", () => startCapture("login"));
     logoutBtn.addEventListener("click", logout);
 
     // ======================================================================
     // Estado inicial
     // ======================================================================
+    setMode(mode);
     renderRegistered();
-    renderSession(); // si había sesión guardada, la restaura
+    renderSession();
   </script>
 </body>
 </html>
