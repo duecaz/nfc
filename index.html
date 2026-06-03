@@ -469,6 +469,37 @@
     setMode(mode);
     renderRegistered();
     renderSession();
+
+    // ======================================================================
+    // Puente con la app Android (panel dazzle)
+    // ----------------------------------------------------------------------
+    // En este panel el lector NFC es un módulo cerrado (MCU GD32 por I2C) que
+    // gestiona "dazzle": al leer la tarjeta NO entrega el UID, sino que CAMBIA
+    // el PERFIL de usuario de Android. Por eso, dentro de la app nativa
+    // (WebView), la credencial es el PERFIL activo, no el UID.
+    //
+    // Si corremos dentro de esa app, existe window.DazzleBridge y hacemos
+    // auto-login según el perfil. En un navegador normal esto no existe y la
+    // página se comporta como siempre (Web NFC / lector USB).
+    //
+    // TODO SUPABASE: acá, en vez de mapear perfil->nombre localmente, podrías
+    // consultar Supabase usando el id de perfil como clave de la cuenta.
+    // ======================================================================
+    if (window.DazzleBridge) {
+      try {
+        const name = DazzleBridge.getUserName();
+        const uid  = "perfil:" + DazzleBridge.getUserId();
+        lastUid.textContent = uid;
+        if (name && name.length) {
+          startSession(uid, name);
+        } else {
+          showMsg(loginMsg,
+            "Perfil Android <code>" + uid + "</code> sin asignar.<br />" +
+            "Agregá ese id en el mapa <code>USERS</code> de la app (MainActivity).",
+            "warn");
+        }
+      } catch (e) { /* sin puente: modo navegador */ }
+    }
   </script>
 </body>
 </html>

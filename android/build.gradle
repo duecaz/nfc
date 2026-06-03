@@ -1,0 +1,18 @@
+// Configuración raíz del proyecto Gradle.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Android Gradle Plugin. Android Studio puede ajustarlo solo si hiciera falta.
+        classpath 'com.android.tools.build:gradle:8.1.4'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
