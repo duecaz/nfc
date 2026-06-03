@@ -5,8 +5,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // Android Gradle Plugin. Android Studio puede ajustarlo solo si hiciera falta.
-        classpath 'com.android.tools.build:gradle:8.1.4'
+        // Android Gradle Plugin. Compatible con Gradle 8.9 (ver gradle-wrapper.properties).
+        classpath 'com.android.tools.build:gradle:8.7.2'
     }
 }
 
