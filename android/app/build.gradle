@@ -31,7 +31,10 @@ android {
 // de la app antes de compilar. Así no duplicamos el HTML.
 // ============================================================================
 tasks.register('copyWeb', Copy) {
-    from "${rootDir}/../index.html"
+    from("${rootDir}/..") {
+        include 'index.html'
+        include 'mockup.html'
+    }
     into "${projectDir}/src/main/assets"
 }
 tasks.named('preBuild') {

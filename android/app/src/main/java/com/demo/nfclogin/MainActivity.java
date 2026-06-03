@@ -60,7 +60,9 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(), "DazzleBridge");
         setContentView(web);
 
-        web.loadUrl("file:///android_asset/index.html");
+        // Mockup/cáscara para mostrar a dazzle (login + home estilo Drive).
+        // Para volver al login por perfil real, cambiá a "index.html".
+        web.loadUrl("file:///android_asset/mockup.html");
     }
 
     @Override
