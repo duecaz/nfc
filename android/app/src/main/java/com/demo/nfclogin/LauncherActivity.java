@@ -33,8 +33,10 @@ public class LauncherActivity extends Activity {
         ActivityOptions opts = ActivityOptions.makeBasic();
         String refl;
         try {
+            // getDeclaredMethod encuentra métodos NO públicos (setLaunchWindowingMode es @hide)
             java.lang.reflect.Method m =
-                ActivityOptions.class.getMethod("setLaunchWindowingMode", int.class);
+                ActivityOptions.class.getDeclaredMethod("setLaunchWindowingMode", int.class);
+            m.setAccessible(true);
             m.invoke(opts, 5); // WINDOWING_MODE_FREEFORM
             refl = "setWM:OK";
         } catch (Throwable t) {
