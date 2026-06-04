@@ -68,6 +68,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Log exacto para copiar desde: adb logcat -d | findstr NFCDBG
+        try { android.util.Log.i("NFCDBG", new Bridge().getDebug()); } catch (Throwable ignore) {}
         // Al volver a primer plano (p.ej. tras un cambio de perfil por NFC)
         // recargamos para re-evaluar el login del perfil activo.
         if (web != null) {
