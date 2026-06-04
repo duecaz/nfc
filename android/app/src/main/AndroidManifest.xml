@@ -4,28 +4,26 @@
     <application
         android:label="NFC Login"
         android:allowBackup="true"
-        android:hardwareAccelerated="true">
+        android:hardwareAccelerated="true"
+        android:resizeableActivity="true">
 
+        <!-- Trampolín: tiene el ícono y abre MainActivity en modo ventana (freeform). -->
         <activity
-            android:name=".MainActivity"
+            android:name=".LauncherActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.NoTitleBar">
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!--
-                Para usar la app como PANTALLA DE INICIO (kiosko) en cada perfil,
-                de modo que al cambiar de usuario con la tarjeta aparezca el login:
-                Ajustes (en cada perfil) > Apps > Apps predeterminadas >
-                App de inicio > "NFC Login".
-                El siguiente filtro la habilita como app de inicio.
-            -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
         </activity>
+
+        <!-- La pantalla real. Resizable para poder vivir en ventana. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:theme="@android:style/Theme.NoTitleBar" />
     </application>
 </manifest>
