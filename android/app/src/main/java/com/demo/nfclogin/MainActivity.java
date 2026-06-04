@@ -93,5 +93,14 @@ public class MainActivity extends Activity {
             String name = USERS.get(serial());
             return name == null ? "" : name;
         }
+
+        /** Diagnóstico de modo ventana para mostrar en pantalla. */
+        @JavascriptInterface
+        public String getDebug() {
+            String d = getIntent() != null ? getIntent().getStringExtra("dbg") : null;
+            boolean mw = false;
+            try { mw = isInMultiWindowMode(); } catch (Throwable ignore) {}
+            return (d == null ? "" : d) + " | multiWindow=" + mw;
+        }
     }
 }
