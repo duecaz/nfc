@@ -30,7 +30,16 @@ public class LauncherActivity extends Activity {
         Rect bounds = new Rect(left, top, left + w, top + h);
 
         ActivityOptions opts = ActivityOptions.makeBasic();
-        opts.setLaunchBounds(bounds);                   // bounds + freeform => ventana
+
+        // Forzar MODO VENTANA (freeform = 5). setLaunchWindowingMode es API @hide;
+        // la invocamos por reflexión (es lo que hace `am start --windowingMode 5`,
+        // que en este panel SÍ abre en ventana). setLaunchBounds le da tamaño/posición.
+        try {
+            java.lang.reflect.Method m =
+                ActivityOptions.class.getMethod("setLaunchWindowingMode", int.class);
+            m.invoke(opts, 5); // WINDOWING_MODE_FREEFORM
+        } catch (Throwable ignore) { }
+        opts.setLaunchBounds(bounds);
 
         Intent i = new Intent(this, MainActivity.class);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
