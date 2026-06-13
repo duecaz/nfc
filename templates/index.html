@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>La Nube · Acceso docente</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: linear-gradient(135deg, #0a2540 0%, #134e6f 100%);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      height: 100vh; overflow: hidden; cursor: none;
+    }
+    .card {
+      text-align: center; padding: 3rem; max-width: 640px; width: 90%;
+    }
+    .logo {
+      width: 120px; height: 120px; border-radius: 50%;
+      background: rgba(255,255,255,.1); margin: 0 auto 2rem;
+      display: flex; align-items: center; justify-content: center; font-size: 64px;
+    }
+    h1 { font-size: 2.6rem; margin-bottom: .5rem; font-weight: 600; }
+    p.sub { font-size: 1.3rem; opacity: .8; margin-bottom: 2.5rem; }
+    .pulse {
+      width: 180px; height: 180px; margin: 0 auto; border-radius: 50%;
+      border: 4px solid #3ddc97; display: flex; align-items: center; justify-content: center;
+      font-size: 90px; animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(61,220,151,.5); }
+      70%  { box-shadow: 0 0 0 30px rgba(61,220,151,0); }
+      100% { box-shadow: 0 0 0 0 rgba(61,220,151,0); }
+    }
+    .status { margin-top: 2.5rem; font-size: 1.4rem; min-height: 2rem; }
+    .status.ok  { color: #3ddc97; }
+    .status.err { color: #ff6b6b; }
+    .uid { font-family: monospace; font-size: 1.1rem; opacity: .7; margin-top: .5rem; }
+    .fallback {
+      position: fixed; bottom: 1.5rem; left: 0; right: 0; text-align: center;
+      color: rgba(255,255,255,.65); font-size: 1rem; text-decoration: none;
+      cursor: pointer;
+    }
+    .fallback:hover { color: #fff; text-decoration: underline; }
+    .repair {
+      position: fixed; top: 1rem; right: 1rem; color: rgba(255,255,255,.5);
+      font-size: .9rem; text-decoration: none; border: 1px solid rgba(255,255,255,.25);
+      padding: .4rem .8rem; border-radius: 8px;
+    }
+    .repair:active { background: rgba(255,255,255,.15); }
+    #catcher { position: absolute; opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <input id="catcher" autocomplete="off" autofocus>
+  <a class="repair" href="/reset">&#x1F527; Reparar pantalla</a>
+  <div class="card">
+    <div class="logo">&#x2601;&#xFE0F;</div>
+    <h1>La Nube</h1>
+    <p class="sub">Acceso para docentes</p>
+    <div class="pulse">&#x1F4B3;</div>
+    <div class="status" id="status">Pasa tu tarjeta para ingresar</div>
+    <div class="uid" id="uid"></div>
+  </div>
+
+  <a class="fallback" href="{{ nextcloud_url }}/login">&#xBF;Sin tarjeta? Entrar con usuario y contrase&#xF1;a</a>
+
+  <script>
+    // Limpiar cualquier SW y cache que pudiera quedar de instalaciones anteriores.
+    // Esto cubre el caso feliz: si el kiosko carga, los SWs viejos se van.
+    // Si el SW impide que esta pagina cargue, usar /reset desde la barra de direcciones.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+    }
+    if (window.caches) {
+      caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
+    }
+
+    const catcher = document.getElementById('catcher');
+    const statusEl = document.getElementById('status');
+    const uidEl = document.getElementById('uid');
+
+    // Mantener el campo SIEMPRE enfocado (el lector NFC "teclea" aqui).
+    function refocus() { catcher.focus(); }
+    setInterval(refocus, 400);
+    document.addEventListener('click', refocus);
+    refocus();
+
+    function setStatus(msg, cls) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    async function authenticate(uid) {
+      setStatus('Verificando…');
+      uidEl.textContent = '';
+      try {
+        const body = new URLSearchParams({ uid });
+        const r = await fetch('/auth', { method: 'POST', body });
+        const data = await r.json();
+        if (data.ok) {
+          setStatus('¡Bienvenido! Abriendo tus archivos…', 'ok');
+          window.location.href = data.redirect;
+        } else if (r.status === 404) {
+          setStatus('Tarjeta no registrada', 'err');
+          uidEl.textContent = 'UID: ' + (data.uid || uid);
+          resetSoon();
+        } else {
+          setStatus(data.error || 'No se pudo ingresar', 'err');
+          resetSoon();
+        }
+      } catch (e) {
+        setStatus('Error de conexión', 'err');
+        resetSoon();
+      }
+    }
+
+    function resetSoon() {
+      setTimeout(() => setStatus('Pasa tu tarjeta para ingresar'), 4000);
+    }
+
+    // El lector escribe el UID y termina con Enter.
+    catcher.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const uid = catcher.value.trim();
+        catcher.value = '';
+        if (uid.length >= 4) authenticate(uid);
+      }
+    });
+  </script>
+</body>
+</html>
