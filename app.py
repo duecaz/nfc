@@ -8,14 +8,17 @@ Flujo:
   1. El navegador (pantalla) muestra la pagina kiosko con un campo enfocado.
   2. El docente pasa la tarjeta -> el lector escribe el UID + Enter.
   3. La pagina hace POST /auth con el UID.
-  4. Este servicio busca el UID en users.json -> {usuario, password}.
+  4. Este servicio busca el UID en users.json -> {usuario, token/password}.
   5. Hace el login contra Nextcloud por detras (handshake con requesttoken).
   6. Reenvia las cookies de sesion al navegador (mismo host) y redirige a Archivos.
 
-El password NUNCA llega al navegador.
+El token/password NUNCA llega al navegador.
 
-NOTA: para el TEST usamos la contrasena real del usuario en users.json. En
-produccion se sustituye por una "app password" (token revocable) de Nextcloud.
+CREDENCIALES EN users.json:
+  Formato preferido -> { "user": "jperez", "token": "xxxx-yyyy-zzzz" }
+  Formato legado   -> { "user": "jperez", "password": "ClaveReal123" }
+  El campo 'token' tiene prioridad. Si el docente cambia su contrasena real,
+  el NFC sigue funcionando siempre que el token no se haya revocado.
 """
 import json
 import os
@@ -66,7 +69,14 @@ def auth():
         return jsonify(ok=False, error="Tarjeta no registrada", uid=uid), 404
 
     username = record["user"]
-    password = record["password"]
+    # Preferir 'token' (app password revocable) sobre 'password' (clave real).
+    # Asi el docente puede cambiar su contrasena sin romper el acceso NFC.
+    credential = record.get("token") or record.get("password")
+    using_token = bool(record.get("token"))
+
+    if not credential:
+        print(f"[AUTH] ERROR: sin credencial para uid={uid}", flush=True)
+        return jsonify(ok=False, error="Sin credencial configurada para esta tarjeta"), 500
 
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0 (kiosk)"})
@@ -85,11 +95,13 @@ def auth():
         print("[AUTH] ERROR: no se encontro requesttoken en el HTML", flush=True)
         return jsonify(ok=False, error="No se obtuvo requesttoken"), 502
 
-    print(f"[AUTH] requesttoken={token[:12]}... user={username}", flush=True)
+    cred_type = "token" if using_token else "password"
+    print(f"[AUTH] requesttoken={token[:12]}... user={username} cred={cred_type}",
+          flush=True)
 
     data = {
         "user": username,
-        "password": password,
+        "password": credential,
         "requesttoken": token,
         "timezone": "America/Lima",
         "timezone_offset": "-5",
@@ -100,6 +112,8 @@ def auth():
         data=data,
         headers={
             "requesttoken": token,
+            # Nextcloud rechaza el login (CSRF) si falta Origin o no coincide con el
+            # host publico -> apuntamos al dominio publico real.
             "Origin": NEXTCLOUD_PUBLIC_URL,
             "Referer": f"{NEXTCLOUD_PUBLIC_URL}/login",
         },
@@ -114,14 +128,16 @@ def auth():
     print(f"[AUTH] body[:300]={body_snippet!r}", flush=True)
 
     if "/login" in location or resp.status_code not in (301, 302, 303):
-        print(f"[AUTH] RECHAZADO para user={username}", flush=True)
+        print(f"[AUTH] RECHAZADO para user={username} (cred={cred_type})", flush=True)
         return jsonify(ok=False, error="Credenciales rechazadas por Nextcloud"), 401
 
-    print(f"[AUTH] OK login user={username} -> {location}", flush=True)
+    print(f"[AUTH] OK login user={username} cred={cred_type} -> {location}", flush=True)
 
     out = make_response(jsonify(ok=True, redirect=f"{NEXTCLOUD_PUBLIC_URL}/apps/files",
                                 user=username))
     for c in s.cookies:
+        # Las cookies __Host- no admiten atributo Domain (el navegador las rechaza).
+        # Nextcloud las regenera solo al entrar al dominio publico, asi que las saltamos.
         if COOKIE_DOMAIN and c.name.startswith("__Host-"):
             continue
         out.set_cookie(c.name, c.value, path="/", httponly=True, samesite="Lax",
@@ -131,8 +147,18 @@ def auth():
 
 @app.route("/health")
 def health():
-    return jsonify(ok=True, users=len(load_users()), nextcloud=NEXTCLOUD_URL,
-                   public=NEXTCLOUD_PUBLIC_URL, cookie_domain=COOKIE_DOMAIN)
+    users = load_users()
+    token_count = sum(1 for v in users.values() if v.get("token"))
+    pass_count = sum(1 for v in users.values() if v.get("password") and not v.get("token"))
+    return jsonify(
+        ok=True,
+        users=len(users),
+        con_token=token_count,
+        con_password=pass_count,
+        nextcloud=NEXTCLOUD_URL,
+        public=NEXTCLOUD_PUBLIC_URL,
+        cookie_domain=COOKIE_DOMAIN,
+    )
 
 
 @app.route("/sw.js")
@@ -155,7 +181,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
     // Solo tomamos control y nos desregistramos.
-    // NO hacemos c.navigate() para no causar bucle en /reset.
+    // NO hacemos c.navigate() - /reset controla la navegacion para evitar bucles.
     e.waitUntil(
         self.clients.claim()
             .then(() => self.registration.unregister())
@@ -179,19 +205,22 @@ def reset():
     """
     Limpieza de pantallas atascadas por SW fantasma de Nextcloud.
 
-    Flujo:
-      1. JS desregistra todos los SWs activos.
+    RESTRICCION DE HARDWARE: las pantallas interactivas NO tienen F12 ni
+    DevTools. La unica forma de acceder es escribir la URL en la barra del
+    navegador usando el teclado virtual de la pantalla tactil.
+
+    Flujo de limpieza:
+      1. JS desregistra todos los SWs activos via getRegistrations().
       2. Limpia Cache API, localStorage y sessionStorage.
-      3. Registra el SW destructor (/sw.js) como segunda capa
-         (cubre SWs en estado 'waiting' que no salen en getRegistrations).
-      4. Muestra boton manual 'Abrir kiosko' + auto-redirect a / con delay,
-         permitiendo que el SW termine de desregistrarse antes de navegar.
+      3. Registra el SW destructor (/sw.js) como segunda capa para cubrir
+         SWs en estado 'waiting' que no aparecen en getRegistrations.
+         El SW NO navega clientes (evita el bucle /reset -> /reset).
+      4. Muestra boton verde 'Abrir kiosko NFC' + auto-redirect a / con
+         delay para que el SW termine de desregistrarse antes de navegar.
 
-    Por que no se usa solo Clear-Site-Data:
-      Ese header no desregistra SWs (no existe esa opcion en la spec).
-
-    Uso en pantalla sin teclado:
-      Escribir  lanube.uno/reset  en la barra de direcciones.
+    Por que no alcanza con Clear-Site-Data:
+      Ese header no puede desregistrar SWs (no existe esa opcion en la
+      spec del navegador). Solo borra la Cache HTTP y localStorage.
     """
     html = """<!DOCTYPE html>
 <html lang="es">
@@ -238,9 +267,9 @@ def reset():
   // 3. Limpiar storage
   try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}
 
-  // 4. Registrar SW destructor como segunda capa
-  //    El SW no navega clientes (evita el bucle): nosotros controlamos
-  //    la navegacion final desde aqui.
+  // 4. Registrar SW destructor como segunda capa.
+  //    El SW no navega clientes - nosotros controlamos la navegacion
+  //    desde aqui para no caer en bucle /reset -> /reset.
   if ('serviceWorker' in navigator) {
     try {
       await navigator.serviceWorker.register('/sw.js', { scope: '/' });
@@ -251,10 +280,10 @@ def reset():
 
   st.textContent = '✅ ' + log.join(' · ');
 
-  // Mostrar boton manual para que el usuario navegue cuando quiera
+  // Mostrar boton manual - el usuario toca cuando quiera
   btn.style.display = 'block';
 
-  // Auto-redirect como respaldo (2 s extra para que el SW se desregistre)
+  // Auto-redirect de respaldo (2 s extra para que el SW se desregistre)
   setTimeout(() => { window.location.replace('/'); }, 2000);
 })();
 </script>
