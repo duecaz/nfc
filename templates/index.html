@@ -12,7 +12,7 @@
       background: linear-gradient(135deg, #0a2540 0%, #134e6f 100%);
       color: #fff;
       display: flex; align-items: center; justify-content: center;
-      height: 100vh; overflow: hidden; cursor: none;
+      height: 100vh; overflow: hidden;
     }
     .card { text-align: center; padding: 3rem; max-width: 640px; width: 90%; }
     .logo {
@@ -60,11 +60,12 @@
     .fallback {
       position: fixed; bottom: 1.5rem; right: 1.5rem;
       color: rgba(255,255,255,.55); font-size: .95rem;
-      text-decoration: none;
+      text-decoration: none; cursor: pointer;
     }
     .fallback:hover { color: #fff; }
 
-    #catcher { position: absolute; opacity: 0; pointer-events: none; }
+    /* Solo el campo invisible del lector NFC oculta el cursor */
+    #catcher { position: absolute; opacity: 0; pointer-events: none; cursor: none; }
   </style>
 </head>
 <body>
