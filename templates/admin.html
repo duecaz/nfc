@@ -8,10 +8,8 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: "Segoe UI", system-ui, sans-serif;
-      background: #0a1628;
-      color: #e2e8f0;
-      min-height: 100vh;
-      padding: 1.5rem;
+      background: #0a1628; color: #e2e8f0;
+      min-height: 100vh; padding: 1.5rem;
     }
     h1 { font-size: 1.8rem; font-weight: 700; }
     h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 1.2rem; color: #94a3b8; }
@@ -29,12 +27,9 @@
     @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
 
     .card {
-      background: #0f2442;
-      border: 1px solid #1e3a5f;
-      border-radius: 16px;
-      padding: 1.5rem;
+      background: #0f2442; border: 1px solid #1e3a5f;
+      border-radius: 16px; padding: 1.5rem;
     }
-
     label {
       display: block; font-size: .85rem; color: #94a3b8;
       margin-bottom: .35rem; margin-top: 1rem;
@@ -49,12 +44,9 @@
     input:focus { border-color: #38bdf8; }
 
     .uid-zone {
-      margin-top: 1rem;
-      background: #071526;
-      border: 2px dashed #2d5080;
-      border-radius: 12px;
-      padding: 1rem;
-      text-align: center;
+      margin-top: 1rem; background: #071526;
+      border: 2px dashed #2d5080; border-radius: 12px;
+      padding: 1rem; text-align: center;
     }
     .uid-label { font-size: .8rem; color: #64748b; margin-bottom: .5rem; }
     #uid-display {
@@ -67,8 +59,7 @@
     .btn {
       display: inline-block; width: 100%; padding: .85rem 1rem;
       border: none; border-radius: 10px; font-size: 1rem; font-weight: 600;
-      cursor: pointer; transition: filter .15s;
-      margin-top: .75rem;
+      cursor: pointer; transition: filter .15s; margin-top: .75rem;
     }
     .btn:hover:not(:disabled) { filter: brightness(1.1); }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -81,6 +72,12 @@
       border-radius: 8px; margin-top: 0;
     }
     .btn-del:hover { background: #7f1d1d; }
+    .btn-edit  {
+      width: auto; padding: .4rem .9rem; font-size: .85rem;
+      background: #0c2a4a; color: #7dd3fc;
+      border-radius: 8px; margin-top: 0;
+    }
+    .btn-edit:hover { background: #1e4a7a; }
 
     .msg {
       margin-top: .75rem; padding: .75rem 1rem;
@@ -91,12 +88,18 @@
     .msg.err  { background: #450a0a; color: #fca5a5; }
     .msg.info { background: #0c2a4a; color: #7dd3fc; }
 
+    /* Lista de tarjetas */
     .card-list { display: flex; flex-direction: column; gap: .75rem; }
+    .card-entry { border-radius: 10px; overflow: hidden; }
     .card-row {
       display: flex; align-items: center; gap: .75rem;
       background: #071526; border: 1px solid #1e3a5f;
-      border-radius: 10px; padding: .85rem 1rem;
+      padding: .85rem 1rem;
     }
+    .card-entry .card-row { border-radius: 0; }
+    .card-entry .card-row:first-child { border-radius: 10px 10px 0 0; }
+    .card-entry:not(.editing) .card-row:first-child { border-radius: 10px; }
+
     .card-info { flex: 1; min-width: 0; }
     .card-name { font-weight: 600; font-size: 1rem; white-space: nowrap;
                  overflow: hidden; text-overflow: ellipsis; }
@@ -109,6 +112,29 @@
     .badge.token    { background: #052e16; color: #86efac; }
     .badge.password { background: #422006; color: #fdba74; }
     .empty { color: #475569; font-size: .95rem; text-align: center; padding: 1.5rem 0; }
+
+    /* Panel de edición inline */
+    .edit-panel {
+      display: none;
+      background: #040f1e;
+      border: 1px solid #1e3a5f; border-top: none;
+      border-radius: 0 0 10px 10px;
+      padding: 1rem 1rem 1.2rem;
+    }
+    .card-entry.editing .edit-panel { display: block; }
+    .edit-panel label { margin-top: .75rem; }
+    .edit-panel label:first-of-type { margin-top: 0; }
+    .edit-panel small { color: #475569; font-weight: 400; }
+    .edit-actions {
+      display: flex; gap: .6rem; margin-top: .85rem;
+    }
+    .edit-actions .btn {
+      flex: 1; padding: .65rem .8rem; font-size: .9rem; margin-top: 0;
+    }
+    .btn-save-ep  { background: #3ddc97; color: #071526; }
+    .btn-cancel-ep { background: #1e3a5f; color: #94a3b8; }
+    .ep-msg { margin-top: .6rem; font-size: .85rem; min-height: 1.2rem; }
+
     footer { margin-top: 2.5rem; text-align: center; color: #334155; font-size: .75rem; }
   </style>
 </head>
@@ -143,14 +169,10 @@
           &#x1F4C7; Escanear tarjeta
         </button>
       </div>
-
       <input id="uid-capture" type="text" autocomplete="off">
 
       <div class="msg" id="reg-msg"></div>
-
-      <button class="btn btn-save" id="reg-btn" disabled>
-        Guardar y generar token
-      </button>
+      <button class="btn btn-save" id="reg-btn" disabled>Guardar y generar token</button>
     </div>
 
     <!-- ====== LISTA ====== -->
@@ -162,18 +184,32 @@
 
       <div class="card-list" id="card-list">
         {% for uid, info in users.items() %}
-        <div class="card-row" data-uid="{{ uid }}">
-          <div class="card-info">
-            <div class="card-name">{{ info.get('name', info.get('user', '?')) }}</div>
-            <div class="card-user">{{ info.get('user', '?') }}</div>
-            <div class="card-uid">{{ uid }}</div>
+        <div class="card-entry" id="entry-{{ uid }}">
+          <div class="card-row" data-uid="{{ uid }}">
+            <div class="card-info">
+              <div class="card-name">{{ info.get('name', info.get('user', '?')) }}</div>
+              <div class="card-user">{{ info.get('user', '?') }}</div>
+              <div class="card-uid">{{ uid }}</div>
+            </div>
+            {% if info.get('token') %}
+            <span class="badge token">Token &#x2713;</span>
+            {% else %}
+            <span class="badge password">Contrase&ntilde;a</span>
+            {% endif %}
+            <button class="btn btn-edit" data-uid="{{ uid }}">Editar</button>
+            <button class="btn btn-del"  data-uid="{{ uid }}">Eliminar</button>
           </div>
-          {% if info.get('token') %}
-          <span class="badge token">Token &#x2713;</span>
-          {% else %}
-          <span class="badge password">Contrase&ntilde;a</span>
-          {% endif %}
-          <button class="btn btn-del" data-uid="{{ uid }}">Eliminar</button>
+          <div class="edit-panel" id="ep-{{ uid }}">
+            <label>Nombre</label>
+            <input type="text" class="ep-name" value="{{ info.get('name', info.get('user', '')) }}" autocomplete="off">
+            <label>Contrase&ntilde;a NC para regenerar token <small>(dejar vac&iacute;o para no cambiar)</small></label>
+            <input type="password" class="ep-pass" autocomplete="current-password">
+            <div class="edit-actions">
+              <button class="btn btn-save-ep"   data-uid="{{ uid }}">Guardar</button>
+              <button class="btn btn-cancel-ep" data-uid="{{ uid }}">Cancelar</button>
+            </div>
+            <div class="ep-msg" id="epmsg-{{ uid }}"></div>
+          </div>
         </div>
         {% else %}
         <p class="empty">No hay tarjetas registradas todav&iacute;a.</p>
@@ -188,6 +224,7 @@
   <script>
   "use strict";
 
+  // ---- Registro nueva tarjeta ----
   const scanBtn    = document.getElementById('scan-btn');
   const uidCapture = document.getElementById('uid-capture');
   const uidDisplay = document.getElementById('uid-display');
@@ -267,22 +304,98 @@
 
   function appendCard(uid, data) {
     document.querySelector('.empty')?.remove();
-    const row = document.createElement('div');
-    row.className = 'card-row';
-    row.dataset.uid = uid;
-    row.innerHTML = `
-      <div class="card-info">
-        <div class="card-name">${escHtml(data.name || data.user)}</div>
-        <div class="card-user">${escHtml(data.user)}</div>
-        <div class="card-uid">${escHtml(uid)}</div>
+    const entry = document.createElement('div');
+    entry.className = 'card-entry';
+    entry.id = 'entry-' + uid;
+    entry.innerHTML = `
+      <div class="card-row" data-uid="${esc(uid)}">
+        <div class="card-info">
+          <div class="card-name">${esc(data.name || data.user)}</div>
+          <div class="card-user">${esc(data.user)}</div>
+          <div class="card-uid">${esc(uid)}</div>
+        </div>
+        <span class="badge token">Token &#x2713;</span>
+        <button class="btn btn-edit" data-uid="${esc(uid)}">Editar</button>
+        <button class="btn btn-del"  data-uid="${esc(uid)}">Eliminar</button>
       </div>
-      <span class="badge token">Token &#x2713;</span>
-      <button class="btn btn-del" data-uid="${escHtml(uid)}">Eliminar</button>`;
-    row.querySelector('.btn-del').addEventListener('click', deleteCard);
-    cardList.appendChild(row);
+      <div class="edit-panel" id="ep-${esc(uid)}">
+        <label>Nombre</label>
+        <input type="text" class="ep-name" value="${esc(data.name || data.user)}" autocomplete="off">
+        <label>Contrase&ntilde;a NC para regenerar token <small>(dejar vacío para no cambiar)</small></label>
+        <input type="password" class="ep-pass" autocomplete="current-password">
+        <div class="edit-actions">
+          <button class="btn btn-save-ep"   data-uid="${esc(uid)}">Guardar</button>
+          <button class="btn btn-cancel-ep" data-uid="${esc(uid)}">Cancelar</button>
+        </div>
+        <div class="ep-msg" id="epmsg-${esc(uid)}"></div>
+      </div>`;
+    entry.querySelector('.btn-edit').addEventListener('click', openEdit);
+    entry.querySelector('.btn-del').addEventListener('click', deleteCard);
+    entry.querySelector('.btn-save-ep').addEventListener('click', saveEdit);
+    entry.querySelector('.btn-cancel-ep').addEventListener('click', cancelEdit);
+    cardList.appendChild(entry);
     updateCount();
   }
 
+  // ---- Editar tarjeta ----
+  document.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', openEdit));
+  document.querySelectorAll('.btn-save-ep').forEach(b => b.addEventListener('click', saveEdit));
+  document.querySelectorAll('.btn-cancel-ep').forEach(b => b.addEventListener('click', cancelEdit));
+
+  function openEdit(e) {
+    const uid   = e.currentTarget.dataset.uid;
+    const entry = document.getElementById('entry-' + uid);
+    const isOpen = entry.classList.contains('editing');
+    // Cerrar todos los paneles abiertos
+    document.querySelectorAll('.card-entry.editing').forEach(el => el.classList.remove('editing'));
+    if (!isOpen) entry.classList.add('editing');
+  }
+
+  function cancelEdit(e) {
+    document.getElementById('entry-' + e.currentTarget.dataset.uid)
+            .classList.remove('editing');
+  }
+
+  async function saveEdit(e) {
+    const uid   = e.currentTarget.dataset.uid;
+    const panel = document.getElementById('ep-' + uid);
+    const msgEl = document.getElementById('epmsg-' + uid);
+    const name  = panel.querySelector('.ep-name').value.trim();
+    const pass  = panel.querySelector('.ep-pass').value.trim();
+
+    msgEl.style.color = '#7dd3fc';
+    msgEl.textContent = 'Guardando…';
+
+    try {
+      const r = await fetch('/admin/update', {
+        method: 'POST',
+        body: new URLSearchParams({ uid, display_name: name, nc_password: pass }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        msgEl.style.color = '#86efac';
+        msgEl.textContent = '✅ Guardado';
+        const row = document.querySelector(`.card-row[data-uid="${uid}"]`);
+        if (row) {
+          row.querySelector('.card-name').textContent = data.name || name;
+          if (pass && data.has_token) {
+            const badge = row.querySelector('.badge');
+            if (badge) { badge.textContent = 'Token ✓'; badge.className = 'badge token'; }
+          }
+        }
+        panel.querySelector('.ep-pass').value = '';
+        setTimeout(() => {
+          document.getElementById('entry-' + uid).classList.remove('editing');
+          msgEl.textContent = '';
+        }, 1400);
+      } else {
+        msgEl.style.color = '#fca5a5';
+        msgEl.textContent = '❌ ' + (data.error || 'Error desconocido');
+      }
+    } catch { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Error de conexión'; }
+  }
+
+  // ---- Eliminar tarjeta ----
   document.querySelectorAll('.btn-del').forEach(b => b.addEventListener('click', deleteCard));
 
   async function deleteCard(e) {
@@ -291,7 +404,7 @@
     const r    = await fetch('/admin/delete', { method: 'POST', body: new URLSearchParams({ uid }) });
     const data = await r.json();
     if (data.ok) {
-      document.querySelector(`.card-row[data-uid="${uid}"]`)?.remove();
+      document.getElementById('entry-' + uid)?.remove();
       updateCount();
       if (!document.querySelector('.card-row'))
         cardList.innerHTML = '<p class="empty">No hay tarjetas registradas todavía.</p>';
@@ -301,7 +414,7 @@
   function updateCount() {
     countEl.textContent = '(' + document.querySelectorAll('.card-row').length + ')';
   }
-  function escHtml(s) {
+  function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   </script>

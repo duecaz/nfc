@@ -17,7 +17,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-14.5"
+VERSION              = "2026-06-14.6"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -26,7 +26,6 @@ ADMIN_PASSWORD       = os.environ.get("ADMIN_PASSWORD", "admin1234")
 
 _ADMIN_SESSION = secrets.token_hex(32)
 
-# VERSION disponible en todos los templates sin pasarlo manualmente.
 app.jinja_env.globals["version"] = VERSION
 
 USERS_FILE = Path(__file__).parent / "users.json"
@@ -73,7 +72,6 @@ def get_requesttoken(html):
 
 
 def _cleanup_page(title, subtitle):
-    """Pagina de limpieza de emergencia (solo para /reset)."""
     html = f"""<!DOCTYPE html>
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -247,10 +245,6 @@ def health():
 
 @app.route("/login")
 def login_catch():
-    """
-    El SW viejo puede redirigir a /login. Servimos el kiosko directamente
-    con limpieza silenciosa de SW en segundo plano.
-    """
     return render_template("index.html", nextcloud_url=NEXTCLOUD_PUBLIC_URL,
                            auto_repair=True)
 
@@ -258,11 +252,6 @@ def login_catch():
 @app.route("/index.php", defaults={"subpath": ""})
 @app.route("/index.php/<path:subpath>")
 def nextcloud_catch(subpath):
-    """
-    El SW viejo redirige a /index.php/login (y otras rutas de Nextcloud).
-    Servimos el kiosko directamente; el JS de auto_repair limpia el SW
-    en segundo plano y corrige la URL a / sin recargar.
-    """
     return render_template("index.html", nextcloud_url=NEXTCLOUD_PUBLIC_URL,
                            auto_repair=True)
 
@@ -273,7 +262,6 @@ def nextcloud_catch(subpath):
 
 @app.route("/sw-kiosk.js")
 def sw_kiosk_js():
-    """SW permanente del kiosko: passthrough puro, mantiene el scope / ocupado."""
     js = """\
 // Kiosko SW permanente - La Nube NFC
 self.addEventListener('install', (e) => {
@@ -292,7 +280,6 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 
 @app.route("/sw.js")
 def sw_js():
-    """SW auto-destructor: usado por /reset para SWs en estado 'waiting'."""
     js = """\
 // Auto-destructor SW - La Nube kiosko NFC
 self.addEventListener('install', (e) => {
@@ -313,7 +300,6 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 
 @app.route("/reset")
 def reset():
-    """Limpieza de emergencia manual. Solo se usa desde el boton 'Reparar'."""
     return _cleanup_page(
         title="Reparando pantalla…",
         subtitle="Limpiando caché y service workers…",
@@ -370,6 +356,54 @@ def admin_register():
 
     print(f"[ADMIN] Registrada: uid={uid} user={username}", flush=True)
     return jsonify(ok=True, uid=uid, user=username, name=display_name)
+
+
+@app.route("/admin/update", methods=["POST"])
+@require_admin
+def admin_update():
+    uid          = (request.form.get("uid")          or "").strip()
+    display_name = (request.form.get("display_name") or "").strip()
+    nc_password  = (request.form.get("nc_password")  or "").strip()
+
+    users = load_users()
+    if uid not in users:
+        return jsonify(ok=False, error="UID no encontrado"), 404
+
+    record   = users[uid]
+    username = record["user"]
+
+    if display_name:
+        record["name"] = display_name
+
+    if nc_password:
+        try:
+            r = requests.get(
+                f"{NEXTCLOUD_URL}/ocs/v2.php/core/getapppassword",
+                auth=(username, nc_password),
+                headers={"OCS-APIRequest": "true"},
+                timeout=10,
+            )
+        except requests.RequestException as exc:
+            return jsonify(ok=False, error=f"Error contactando Nextcloud: {exc}"), 502
+
+        try:
+            root       = ET.fromstring(r.text)
+            statuscode = root.findtext(".//statuscode") or ""
+            app_pw_el  = root.find(".//apppassword")
+        except ET.ParseError:
+            return jsonify(ok=False, error="Respuesta inesperada de Nextcloud"), 502
+
+        if statuscode != "200" or app_pw_el is None:
+            msg = root.findtext(".//message") or "Credenciales incorrectas"
+            return jsonify(ok=False, error=msg), 401
+
+        record["token"] = app_pw_el.text
+        record.pop("password", None)
+
+    save_users(users)
+    print(f"[ADMIN] Actualizada: uid={uid} user={username}", flush=True)
+    return jsonify(ok=True, uid=uid, name=record.get("name", username),
+                   has_token=bool(record.get("token")))
 
 
 @app.route("/admin/delete", methods=["POST"])
