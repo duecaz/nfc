@@ -23,8 +23,6 @@ COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
 COOKIE_SECURE        = NEXTCLOUD_PUBLIC_URL.startswith("https")
 ADMIN_PASSWORD       = os.environ.get("ADMIN_PASSWORD", "admin1234")
 
-# Token de sesion admin generado al arrancar.
-# Si el contenedor se reinicia todas las sesiones se invalidan (comportamiento OK).
 _ADMIN_SESSION = secrets.token_hex(32)
 
 USERS_FILE = Path(__file__).parent / "users.json"
@@ -50,7 +48,7 @@ def get_requesttoken(html):
 
 
 # ---------------------------------------------------------------------------
-# Admin auth (formulario + cookie — funciona a traves de Cloudflare)
+# Admin auth
 # ---------------------------------------------------------------------------
 
 def is_admin():
@@ -76,7 +74,7 @@ def admin_login():
             resp.set_cookie(
                 "admin_session", _ADMIN_SESSION,
                 httponly=True, samesite="Lax",
-                secure=COOKIE_SECURE, max_age=28800,  # 8 horas
+                secure=COOKIE_SECURE, max_age=28800,
             )
             return resp
         error = "Contraseña incorrecta"
@@ -110,8 +108,8 @@ def auth():
     if not record:
         return jsonify(ok=False, error="Tarjeta no registrada", uid=uid), 404
 
-    username   = record["user"]
-    credential = record.get("token") or record.get("password")
+    username    = record["user"]
+    credential  = record.get("token") or record.get("password")
     using_token = bool(record.get("token"))
 
     if not credential:
@@ -153,8 +151,7 @@ def auth():
     )
 
     location = resp.headers.get("Location", "")
-    print(f"[AUTH] POST /login -> {resp.status_code} location={location!r}",
-          flush=True)
+    print(f"[AUTH] POST /login -> {resp.status_code} location={location!r}", flush=True)
 
     if "/login" in location or resp.status_code not in (301, 302, 303):
         print(f"[AUTH] RECHAZADO user={username}", flush=True)
@@ -190,12 +187,58 @@ def health():
 
 
 # ---------------------------------------------------------------------------
-# Service worker y reset
+# Service workers
 # ---------------------------------------------------------------------------
+
+@app.route("/sw-kiosk.js")
+def sw_kiosk_js():
+    """
+    SW PERMANENTE del kiosko.
+
+    Se instala en el scope '/' de lanube.uno y lo mantiene ocupado.
+    Una vez instalado, ningun SW externo (ej: Nextcloud viejo) puede
+    volver a tomar el control porque solo puede ser reemplazado por
+    otro SW registrado en el mismo scope.
+
+    Caracteristicas:
+    - Passthrough puro: NO cachea nada, todo pasa al servidor Flask.
+    - skipWaiting: se activa inmediatamente si habia un SW anterior.
+    - clients.claim: toma el control de todas las pestanas abiertas.
+    - Sirve con Cache-Control: no-store para que el browser siempre
+      lo re-descargue y detecte si cambia.
+    """
+    js = """\
+// Kiosko SW permanente - La Nube NFC
+// Passthrough puro. Mantiene el scope / ocupado para prevenir SWs externos.
+self.addEventListener('install', (e) => {
+    self.skipWaiting();
+    // Limpiar caches viejos (ej: del Nextcloud anterior)
+    e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
+});
+self.addEventListener('activate', (e) => {
+    e.waitUntil(self.clients.claim());
+});
+// Passthrough puro - delega todo al servidor, no cachea nada
+self.addEventListener('fetch', (e) => {
+    e.respondWith(fetch(e.request));
+});
+"""
+    resp = make_response(js)
+    resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-store, no-cache"
+    return resp
+
 
 @app.route("/sw.js")
 def sw_js():
+    """
+    SW AUTO-DESTRUCTOR (solo usado por /reset).
+    Toma control inmediatamente, borra caches y se desregistra.
+    No navega clientes para evitar el bucle /reset -> /reset.
+    """
     js = """\
+// Auto-destructor SW - La Nube kiosko NFC
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
@@ -214,6 +257,14 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 
 @app.route("/reset")
 def reset():
+    """
+    Limpieza de emergencia para pantallas atascadas por SW fantasma.
+    Acceder escribiendo  lanube.uno/reset  en la barra de URLs.
+    NO requiere F12 ni DevTools.
+    Despues de /reset, el SW permanente del kiosko (/sw-kiosk.js)
+    se instala automaticamente en la siguiente carga de / para
+    prevenir que el problema vuelva a ocurrir.
+    """
     html = """<!DOCTYPE html>
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -230,19 +281,24 @@ def reset():
 <script>
 (async()=>{
   const st=document.getElementById('st'),btn=document.getElementById('btn'),log=[];
+  // 1. Desregistrar todos los SWs activos
   if('serviceWorker' in navigator){
     try{const r=await navigator.serviceWorker.getRegistrations();
       await Promise.all(r.map(x=>x.unregister()));log.push('SW:'+r.length);}catch(e){}
   }
+  // 2. Limpiar caches
   if(window.caches){try{const k=await caches.keys();
     await Promise.all(k.map(x=>caches.delete(x)));log.push('Cache:'+k.length);}catch(e){}}
+  // 3. Limpiar storage
   try{localStorage.clear();sessionStorage.clear();}catch(e){}
+  // 4. SW destructor para SWs en estado 'waiting'
   if('serviceWorker' in navigator){
     try{await navigator.serviceWorker.register('/sw.js',{scope:'/'});
-      await new Promise(r=>setTimeout(r,1000));log.push('Destructor:OK');}catch(e){}
+      await new Promise(r=>setTimeout(r,800));log.push('Destructor:OK');}catch(e){}
   }
   st.textContent='✅ '+log.join(' · ');
   btn.style.display='block';
+  // Auto-redirige a / donde el SW permanente del kiosko se instala
   setTimeout(()=>{window.location.replace('/');},2000);
 })();
 </script></body></html>"""

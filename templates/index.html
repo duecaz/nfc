@@ -13,9 +13,7 @@
       color: #fff; display: flex; align-items: center; justify-content: center;
       height: 100vh; overflow: hidden; cursor: none;
     }
-    .card {
-      text-align: center; padding: 3rem; max-width: 640px; width: 90%;
-    }
+    .card { text-align: center; padding: 3rem; max-width: 640px; width: 90%; }
     .logo {
       width: 120px; height: 120px; border-radius: 50%;
       background: rgba(255,255,255,.1); margin: 0 auto 2rem;
@@ -25,7 +23,8 @@
     p.sub { font-size: 1.3rem; opacity: .8; margin-bottom: 2.5rem; }
     .pulse {
       width: 180px; height: 180px; margin: 0 auto; border-radius: 50%;
-      border: 4px solid #3ddc97; display: flex; align-items: center; justify-content: center;
+      border: 4px solid #3ddc97;
+      display: flex; align-items: center; justify-content: center;
       font-size: 90px; animation: pulse 2s infinite;
     }
     @keyframes pulse {
@@ -40,7 +39,6 @@
     .fallback {
       position: fixed; bottom: 1.5rem; left: 0; right: 0; text-align: center;
       color: rgba(255,255,255,.65); font-size: 1rem; text-decoration: none;
-      cursor: pointer;
     }
     .fallback:hover { color: #fff; text-decoration: underline; }
     .repair {
@@ -63,26 +61,26 @@
     <div class="status" id="status">Pasa tu tarjeta para ingresar</div>
     <div class="uid" id="uid"></div>
   </div>
-
   <a class="fallback" href="{{ nextcloud_url }}/login">&#xBF;Sin tarjeta? Entrar con usuario y contrase&#xF1;a</a>
 
   <script>
-    // Limpiar cualquier SW y cache que pudiera quedar de instalaciones anteriores.
-    // Esto cubre el caso feliz: si el kiosko carga, los SWs viejos se van.
-    // Si el SW impide que esta pagina cargue, usar /reset desde la barra de direcciones.
+    // Instalar el SW permanente del kiosko.
+    // - En browsers limpios (sin SW viejo): se instala directo y protege el scope /.
+    // - Si habia un SW de Nextcloud: skipWaiting lo reemplaza inmediatamente.
+    // - Si el SW viejo intercepto la pagina antes de que este JS corra:
+    //   el usuario debe usar /reset una vez; despues esto ya funciona.
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations()
-        .then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+      navigator.serviceWorker.register('/sw-kiosk.js', { scope: '/' }).catch(() => {});
     }
+    // Limpiar caches de versiones anteriores del kiosko
     if (window.caches) {
       caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
     }
 
-    const catcher = document.getElementById('catcher');
+    const catcher  = document.getElementById('catcher');
     const statusEl = document.getElementById('status');
-    const uidEl = document.getElementById('uid');
+    const uidEl    = document.getElementById('uid');
 
-    // Mantener el campo SIEMPRE enfocado (el lector NFC "teclea" aqui).
     function refocus() { catcher.focus(); }
     setInterval(refocus, 400);
     document.addEventListener('click', refocus);
@@ -97,8 +95,7 @@
       setStatus('Verificando…');
       uidEl.textContent = '';
       try {
-        const body = new URLSearchParams({ uid });
-        const r = await fetch('/auth', { method: 'POST', body });
+        const r    = await fetch('/auth', { method: 'POST', body: new URLSearchParams({ uid }) });
         const data = await r.json();
         if (data.ok) {
           setStatus('¡Bienvenido! Abriendo tus archivos…', 'ok');
@@ -121,7 +118,6 @@
       setTimeout(() => setStatus('Pasa tu tarjeta para ingresar'), 4000);
     }
 
-    // El lector escribe el UID y termina con Enter.
     catcher.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const uid = catcher.value.trim();
