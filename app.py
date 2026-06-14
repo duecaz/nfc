@@ -238,6 +238,18 @@ def health():
 # Intercepcion de rutas de Nextcloud (SW viejo redirige aqui)
 # ---------------------------------------------------------------------------
 
+@app.route("/login")
+def login_catch():
+    """
+    Si el SW viejo redirige a /login (sin /index.php), Flask lo intercepta
+    y muestra la pagina de limpieza en vez de un 404.
+    """
+    return _cleanup_page(
+        title="Reparando pantalla…",
+        subtitle="Se detectó un problema de caché. Limpiando automáticamente…",
+    )
+
+
 @app.route("/index.php", defaults={"subpath": ""})
 @app.route("/index.php/<path:subpath>")
 def nextcloud_catch(subpath):
