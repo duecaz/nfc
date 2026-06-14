@@ -20,10 +20,10 @@
       margin-bottom: 2rem; padding-bottom: 1rem;
       border-bottom: 1px solid #1e3a5f;
     }
-    header a {
-      color: #38bdf8; text-decoration: none; font-size: .95rem;
-    }
-    header a:hover { text-decoration: underline; }
+    .header-links { display: flex; gap: 1.2rem; }
+    .header-links a { color: #38bdf8; text-decoration: none; font-size: .95rem; }
+    .header-links a:hover { text-decoration: underline; }
+    .header-links a.logout { color: #f87171; }
 
     .grid { display: grid; gap: 1.5rem; }
     @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
@@ -91,7 +91,6 @@
     .msg.err  { background: #450a0a; color: #fca5a5; }
     .msg.info { background: #0c2a4a; color: #7dd3fc; }
 
-    /* Card list */
     .card-list { display: flex; flex-direction: column; gap: .75rem; }
     .card-row {
       display: flex; align-items: center; gap: .75rem;
@@ -102,29 +101,28 @@
     .card-name { font-weight: 600; font-size: 1rem; white-space: nowrap;
                  overflow: hidden; text-overflow: ellipsis; }
     .card-user { font-size: .8rem; color: #64748b; margin-top: .1rem; }
-    .card-uid  {
-      font-family: monospace; font-size: .75rem; color: #475569;
-      margin-top: .2rem;
-    }
+    .card-uid  { font-family: monospace; font-size: .75rem; color: #475569; margin-top: .2rem; }
     .badge {
       font-size: .75rem; padding: .2rem .55rem; border-radius: 6px;
       white-space: nowrap; font-weight: 600;
     }
     .badge.token    { background: #052e16; color: #86efac; }
     .badge.password { background: #422006; color: #fdba74; }
-
     .empty { color: #475569; font-size: .95rem; text-align: center; padding: 1.5rem 0; }
   </style>
 </head>
 <body>
   <header>
     <h1>&#x2699;&#xFE0F; Admin NFC &middot; La Nube</h1>
-    <a href="/">&#x2190; Ver kiosko</a>
+    <div class="header-links">
+      <a href="/">&#x2190; Kiosko</a>
+      <a href="/admin/logout" class="logout">Cerrar sesi&oacute;n</a>
+    </div>
   </header>
 
   <div class="grid">
 
-    <!-- ====== FORMULARIO NUEVA TARJETA ====== -->
+    <!-- ====== NUEVA TARJETA ====== -->
     <div class="card">
       <h2>Nueva tarjeta</h2>
 
@@ -139,13 +137,12 @@
 
       <div class="uid-zone">
         <div class="uid-label">UID de la tarjeta NFC</div>
-        <div id="uid-display">&#x2014; Sin escanear &mdash;</div>
+        <div id="uid-display">&mdash; Sin escanear &mdash;</div>
         <button class="btn btn-scan" id="scan-btn" type="button">
           &#x1F4C7; Escanear tarjeta
         </button>
       </div>
 
-      <!-- input invisible donde el lector USB "tipea" el UID -->
       <input id="uid-capture" type="text" autocomplete="off">
 
       <div class="msg" id="reg-msg"></div>
@@ -155,7 +152,7 @@
       </button>
     </div>
 
-    <!-- ====== LISTA DE TARJETAS ====== -->
+    <!-- ====== LISTA ====== -->
     <div class="card">
       <h2>
         Tarjetas registradas
@@ -183,12 +180,11 @@
       </div>
     </div>
 
-  </div><!-- /grid -->
+  </div>
 
   <script>
   "use strict";
 
-  // ---- Referencias DOM ----
   const scanBtn    = document.getElementById('scan-btn');
   const uidCapture = document.getElementById('uid-capture');
   const uidDisplay = document.getElementById('uid-display');
@@ -200,7 +196,6 @@
   let currentUid = '';
   let scanning   = false;
 
-  // ---- Escaneo NFC (lector USB = teclado) ----
   scanBtn.addEventListener('click', () => {
     scanning = true;
     scanBtn.textContent = '⏳ Acerá la tarjeta…';
@@ -209,7 +204,6 @@
     uidCapture.focus();
   });
 
-  // El lector USB "tipea" el UID y termina con Enter
   uidCapture.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || !scanning) return;
     e.preventDefault();
@@ -217,10 +211,7 @@
     uidCapture.value = '';
     scanning = false;
     scanBtn.classList.remove('scanning');
-    if (uid.length < 4) {
-      scanBtn.textContent = '\u{1F4C7} Escanear tarjeta';
-      return;
-    }
+    if (uid.length < 4) { scanBtn.textContent = '\u{1F4C7} Escanear tarjeta'; return; }
     currentUid = uid;
     uidDisplay.textContent = uid;
     uidDisplay.classList.add('ready');
@@ -228,48 +219,35 @@
     regBtn.disabled = false;
   });
 
-  // Si el capture pierde el foco mientras escanea, lo recupera
   uidCapture.addEventListener('blur', () => {
     if (scanning) setTimeout(() => uidCapture.focus(), 0);
   });
 
-  // ---- Mostrar mensaje ----
   function showMsg(text, type) {
     regMsg.textContent = text;
     regMsg.className = 'msg show ' + type;
   }
 
-  // ---- Registrar tarjeta ----
   regBtn.addEventListener('click', async () => {
     const display_name = document.getElementById('display_name').value.trim();
     const username     = document.getElementById('nc_user').value.trim();
     const nc_password  = document.getElementById('nc_pass').value.trim();
-
-    if (!username || !nc_password) {
-      showMsg('Completá el usuario y la contraseña de Nextcloud.', 'err');
-      return;
-    }
-    if (!currentUid) {
-      showMsg('Escaná la tarjeta primero.', 'err');
-      return;
-    }
+    if (!username || !nc_password) { showMsg('Completá usuario y contraseña NC.', 'err'); return; }
+    if (!currentUid)              { showMsg('Escaná la tarjeta primero.', 'err'); return; }
 
     regBtn.disabled = true;
     showMsg('Generando token en Nextcloud…', 'info');
 
-    const body = new URLSearchParams({
-      uid: currentUid, username, nc_password,
-      display_name: display_name || username,
-    });
-
     try {
-      const r    = await fetch('/admin/register', { method: 'POST', body });
+      const r    = await fetch('/admin/register', {
+        method: 'POST',
+        body: new URLSearchParams({ uid: currentUid, username, nc_password,
+                                    display_name: display_name || username }),
+      });
       const data = await r.json();
-
       if (data.ok) {
         showMsg('✅ ' + (data.name || data.user) + ' registrado con token.', 'ok');
         appendCard(currentUid, data);
-        // Reset form
         document.getElementById('display_name').value = '';
         document.getElementById('nc_user').value = '';
         document.getElementById('nc_pass').value = '';
@@ -280,13 +258,10 @@
       } else {
         showMsg('❌ ' + (data.error || 'Error desconocido'), 'err');
       }
-    } catch (e) {
-      showMsg('Error de conexión.', 'err');
-    }
+    } catch (e) { showMsg('Error de conexión.', 'err'); }
     regBtn.disabled = false;
   });
 
-  // ---- Añadir fila a la lista sin recargar ----
   function appendCard(uid, data) {
     document.querySelector('.empty')?.remove();
     const row = document.createElement('div');
@@ -305,38 +280,26 @@
     updateCount();
   }
 
-  // ---- Eliminar tarjeta ----
-  document.querySelectorAll('.btn-del').forEach(b =>
-    b.addEventListener('click', deleteCard)
-  );
+  document.querySelectorAll('.btn-del').forEach(b => b.addEventListener('click', deleteCard));
 
   async function deleteCard(e) {
     const uid = e.currentTarget.dataset.uid;
     if (!confirm('¿Eliminar la tarjeta ' + uid + '?')) return;
-    const r    = await fetch('/admin/delete', {
-      method: 'POST',
-      body: new URLSearchParams({ uid }),
-    });
+    const r    = await fetch('/admin/delete', { method: 'POST', body: new URLSearchParams({ uid }) });
     const data = await r.json();
     if (data.ok) {
       document.querySelector(`.card-row[data-uid="${uid}"]`)?.remove();
       updateCount();
-      if (!document.querySelector('.card-row')) {
+      if (!document.querySelector('.card-row'))
         cardList.innerHTML = '<p class="empty">No hay tarjetas registradas todavía.</p>';
-      }
-    } else {
-      alert('Error: ' + (data.error || 'desconocido'));
-    }
+    } else { alert('Error: ' + (data.error || 'desconocido')); }
   }
 
   function updateCount() {
     countEl.textContent = '(' + document.querySelectorAll('.card-row').length + ')';
   }
-
   function escHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   </script>
 </body>

@@ -1,51 +1,36 @@
 """
 Kiosko NFC -> Nextcloud (lanube.uno)
--------------------------------------
-Mini-servicio que loguea a un docente en Nextcloud usando solo el UID de su
-tarjeta NFC (el lector USB "teclea" el UID como un teclado).
-
-Flujo:
-  1. El navegador (pantalla) muestra la pagina kiosko con un campo enfocado.
-  2. El docente pasa la tarjeta -> el lector escribe el UID + Enter.
-  3. La pagina hace POST /auth con el UID.
-  4. Este servicio busca el UID en users.json -> {usuario, token}.
-  5. Hace el login contra Nextcloud por detras (handshake con requesttoken).
-  6. Reenvia las cookies de sesion al navegador (mismo host) y redirige a Archivos.
-
-El token NUNCA llega al navegador.
-
-Rutas:
-  GET  /          -> kiosko NFC (pantallas interactivas)
-  POST /auth      -> autenticacion via UID
-  GET  /health    -> estado del servicio
-  GET  /sw.js     -> SW auto-destructor (limpia SWs viejos de Nextcloud)
-  GET  /reset     -> limpieza de pantalla atascada (sin F12 ni DevTools)
-  GET  /admin     -> panel de administracion (HTTP Basic Auth)
-  POST /admin/register -> registrar tarjeta + generar token NC
-  POST /admin/delete   -> eliminar tarjeta
 """
 import json
 import os
 import re
+import secrets
 import xml.etree.ElementTree as ET
 from functools import wraps
 from pathlib import Path
 
 import requests
-from flask import Flask, jsonify, make_response, render_template, request
+from flask import (
+    Flask, jsonify, make_response, redirect,
+    render_template, request, url_for,
+)
 
 app = Flask(__name__)
 
-NEXTCLOUD_URL = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
+NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
-COOKIE_DOMAIN = os.environ.get("COOKIE_DOMAIN") or None
-COOKIE_SECURE = NEXTCLOUD_PUBLIC_URL.startswith("https")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin1234")
+COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
+COOKIE_SECURE        = NEXTCLOUD_PUBLIC_URL.startswith("https")
+ADMIN_PASSWORD       = os.environ.get("ADMIN_PASSWORD", "admin1234")
+
+# Token de sesion admin generado al arrancar.
+# Si el contenedor se reinicia todas las sesiones se invalidan (comportamiento OK).
+_ADMIN_SESSION = secrets.token_hex(32)
 
 USERS_FILE = Path(__file__).parent / "users.json"
 
 REQUESTTOKEN_RE = re.compile(r'name="requesttoken"\s+value="([^"]+)"')
-HEAD_TOKEN_RE = re.compile(r'data-requesttoken="([^"]+)"')
+HEAD_TOKEN_RE   = re.compile(r'data-requesttoken="([^"]+)"')
 
 
 def load_users():
@@ -64,18 +49,45 @@ def get_requesttoken(html):
     return m.group(1) if m else None
 
 
+# ---------------------------------------------------------------------------
+# Admin auth (formulario + cookie — funciona a traves de Cloudflare)
+# ---------------------------------------------------------------------------
+
+def is_admin():
+    return request.cookies.get("admin_session") == _ADMIN_SESSION
+
+
 def require_admin(f):
-    """Decorator: exige HTTP Basic Auth con usuario 'admin' y ADMIN_PASSWORD."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or auth.username != "admin" or auth.password != ADMIN_PASSWORD:
-            return make_response(
-                "<h1>Acceso denegado</h1>", 401,
-                {"WWW-Authenticate": 'Basic realm="Admin La Nube"'}
-            )
+        if not is_admin():
+            return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
     return decorated
+
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    error = None
+    if request.method == "POST":
+        pw = (request.form.get("password") or "").strip()
+        if pw == ADMIN_PASSWORD:
+            resp = make_response(redirect(url_for("admin_panel")))
+            resp.set_cookie(
+                "admin_session", _ADMIN_SESSION,
+                httponly=True, samesite="Lax",
+                secure=COOKIE_SECURE, max_age=28800,  # 8 horas
+            )
+            return resp
+        error = "Contraseña incorrecta"
+    return render_template("admin_login.html", error=error)
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    resp = make_response(redirect(url_for("admin_login")))
+    resp.delete_cookie("admin_session")
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -98,8 +110,7 @@ def auth():
     if not record:
         return jsonify(ok=False, error="Tarjeta no registrada", uid=uid), 404
 
-    username = record["user"]
-    # Preferir token (app password revocable) sobre contrasena real.
+    username   = record["user"]
     credential = record.get("token") or record.get("password")
     using_token = bool(record.get("token"))
 
@@ -120,8 +131,7 @@ def auth():
         return jsonify(ok=False, error="No se obtuvo requesttoken"), 502
 
     cred_type = "token" if using_token else "password"
-    print(f"[AUTH] user={username} cred={cred_type} requesttoken={token[:12]}...",
-          flush=True)
+    print(f"[AUTH] user={username} cred={cred_type}", flush=True)
 
     resp = s.post(
         f"{NEXTCLOUD_URL}/login",
@@ -147,11 +157,10 @@ def auth():
           flush=True)
 
     if "/login" in location or resp.status_code not in (301, 302, 303):
-        print(f"[AUTH] RECHAZADO user={username} cred={cred_type}", flush=True)
+        print(f"[AUTH] RECHAZADO user={username}", flush=True)
         return jsonify(ok=False, error="Credenciales rechazadas por Nextcloud"), 401
 
     print(f"[AUTH] OK user={username}", flush=True)
-
     out = make_response(jsonify(
         ok=True,
         redirect=f"{NEXTCLOUD_PUBLIC_URL}/apps/files",
@@ -168,14 +177,12 @@ def auth():
 @app.route("/health")
 def health():
     users = load_users()
-    token_count = sum(1 for v in users.values() if v.get("token"))
-    pass_count = sum(1 for v in users.values()
-                     if v.get("password") and not v.get("token"))
     return jsonify(
         ok=True,
         users=len(users),
-        con_token=token_count,
-        con_password=pass_count,
+        con_token=sum(1 for v in users.values() if v.get("token")),
+        con_password=sum(1 for v in users.values()
+                         if v.get("password") and not v.get("token")),
         nextcloud=NEXTCLOUD_URL,
         public=NEXTCLOUD_PUBLIC_URL,
         cookie_domain=COOKIE_DOMAIN,
@@ -188,10 +195,7 @@ def health():
 
 @app.route("/sw.js")
 def sw_js():
-    """SW auto-destructor: toma control, borra caches y se desregistra sin
-    navegar clientes (evita el bucle /reset -> /reset)."""
     js = """\
-// Auto-destructor SW - La Nube kiosko NFC
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
@@ -210,18 +214,12 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 
 @app.route("/reset")
 def reset():
-    """Limpieza para pantallas atascadas por SW fantasma de Nextcloud.
-    Acceder escribiendo  lanube.uno/reset  en la barra de URLs (teclado virtual).
-    NO requiere F12 ni DevTools.
-    """
     html = """<!DOCTYPE html>
 <html lang="es"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Reparando…</title>
-</head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reparando…</title></head>
 <body style="background:#0a2540;color:#fff;font-family:sans-serif;
-            text-align:center;padding-top:20vh;padding:20vh 1rem 0">
+            text-align:center;padding:20vh 1rem 0">
 <h1>&#x1F9F9; Limpiando pantalla…</h1>
 <p id="st" style="opacity:.8;font-size:1.2rem;margin-top:1rem">Iniciando…</p>
 <div id="btn" style="display:none;margin-top:2.5rem">
@@ -234,16 +232,14 @@ def reset():
   const st=document.getElementById('st'),btn=document.getElementById('btn'),log=[];
   if('serviceWorker' in navigator){
     try{const r=await navigator.serviceWorker.getRegistrations();
-      await Promise.all(r.map(x=>x.unregister()));log.push('SW:'+r.length);}
-    catch(e){log.push('SW err');}
+      await Promise.all(r.map(x=>x.unregister()));log.push('SW:'+r.length);}catch(e){}
   }
   if(window.caches){try{const k=await caches.keys();
     await Promise.all(k.map(x=>caches.delete(x)));log.push('Cache:'+k.length);}catch(e){}}
   try{localStorage.clear();sessionStorage.clear();}catch(e){}
   if('serviceWorker' in navigator){
     try{await navigator.serviceWorker.register('/sw.js',{scope:'/'});
-      await new Promise(r=>setTimeout(r,1000));log.push('Destructor:OK');}
-    catch(e){log.push('Destructor:'+e.message);}
+      await new Promise(r=>setTimeout(r,1000));log.push('Destructor:OK');}catch(e){}
   }
   st.textContent='✅ '+log.join(' · ');
   btn.style.display='block';
@@ -257,7 +253,7 @@ def reset():
 
 
 # ---------------------------------------------------------------------------
-# Panel de administracion
+# Panel admin
 # ---------------------------------------------------------------------------
 
 @app.route("/admin")
@@ -271,20 +267,14 @@ def admin_panel():
 @app.route("/admin/register", methods=["POST"])
 @require_admin
 def admin_register():
-    """Genera un app password de Nextcloud para el docente y lo guarda en
-    users.json junto con el UID de su tarjeta. La contrasena real del
-    docente se usa una sola vez y nunca se almacena.
-    """
     uid          = (request.form.get("uid")          or "").strip()
     username     = (request.form.get("username")     or "").strip()
     nc_password  = (request.form.get("nc_password")  or "").strip()
     display_name = (request.form.get("display_name") or username).strip()
 
     if not uid or not username or not nc_password:
-        return jsonify(ok=False, error="Faltan campos: uid, username o nc_password"), 400
+        return jsonify(ok=False, error="Faltan campos"), 400
 
-    # Pedir a Nextcloud que genere un app password para este usuario.
-    # La autenticacion es con la clave real; el token resultante es revocable.
     try:
         r = requests.get(
             f"{NEXTCLOUD_URL}/ocs/v2.php/core/getapppassword",
@@ -296,7 +286,7 @@ def admin_register():
         return jsonify(ok=False, error=f"Error contactando Nextcloud: {exc}"), 502
 
     try:
-        root = ET.fromstring(r.text)
+        root       = ET.fromstring(r.text)
         statuscode = root.findtext(".//statuscode") or ""
         app_pw_el  = root.find(".//apppassword")
     except ET.ParseError:
@@ -306,12 +296,11 @@ def admin_register():
         msg = root.findtext(".//message") or "Credenciales incorrectas"
         return jsonify(ok=False, error=msg), 401
 
-    token = app_pw_el.text
     users = load_users()
-    users[uid] = {"user": username, "name": display_name, "token": token}
+    users[uid] = {"user": username, "name": display_name, "token": app_pw_el.text}
     save_users(users)
 
-    print(f"[ADMIN] Tarjeta registrada: uid={uid} user={username}", flush=True)
+    print(f"[ADMIN] Registrada: uid={uid} user={username}", flush=True)
     return jsonify(ok=True, uid=uid, user=username, name=display_name)
 
 
@@ -324,8 +313,7 @@ def admin_delete():
         return jsonify(ok=False, error="UID no encontrado"), 404
     removed = users.pop(uid)
     save_users(users)
-    print(f"[ADMIN] Tarjeta eliminada: uid={uid} user={removed.get('user')}",
-          flush=True)
+    print(f"[ADMIN] Eliminada: uid={uid} user={removed.get('user')}", flush=True)
     return jsonify(ok=True)
 
 
