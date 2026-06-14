@@ -10,7 +10,8 @@
     body {
       font-family: "Segoe UI", system-ui, sans-serif;
       background: linear-gradient(135deg, #0a2540 0%, #134e6f 100%);
-      color: #fff; display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
       height: 100vh; overflow: hidden; cursor: none;
     }
     .card { text-align: center; padding: 3rem; max-width: 640px; width: 90%; }
@@ -36,23 +37,42 @@
     .status.ok  { color: #3ddc97; }
     .status.err { color: #ff6b6b; }
     .uid { font-family: monospace; font-size: 1.1rem; opacity: .7; margin-top: .5rem; }
+
+    /* Boton de reparar: fijo abajo a la izquierda, grande para touch */
+    .repair-btn {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 1.5rem;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.2);
+      color: rgba(255,255,255,.7);
+      font-size: 1.05rem;
+      padding: .9rem 1.4rem;
+      border-radius: 14px;
+      text-decoration: none;
+      cursor: pointer;
+      min-width: 180px;
+      text-align: center;
+    }
+    .repair-btn:active { background: rgba(255,255,255,.18); }
+
+    /* Link de login manual: fijo abajo a la derecha */
     .fallback {
-      position: fixed; bottom: 1.5rem; left: 0; right: 0; text-align: center;
-      color: rgba(255,255,255,.65); font-size: 1rem; text-decoration: none;
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      color: rgba(255,255,255,.55); font-size: .95rem;
+      text-decoration: none;
     }
-    .fallback:hover { color: #fff; text-decoration: underline; }
-    .repair {
-      position: fixed; top: 1rem; right: 1rem; color: rgba(255,255,255,.5);
-      font-size: .9rem; text-decoration: none; border: 1px solid rgba(255,255,255,.25);
-      padding: .4rem .8rem; border-radius: 8px;
-    }
-    .repair:active { background: rgba(255,255,255,.15); }
+    .fallback:hover { color: #fff; }
+
     #catcher { position: absolute; opacity: 0; pointer-events: none; }
   </style>
 </head>
 <body>
   <input id="catcher" autocomplete="off" autofocus>
-  <a class="repair" href="/reset">&#x1F527; Reparar pantalla</a>
+
+  <!-- Boton de reparar: visible, grande, tocable en pantalla tactil -->
+  <a class="repair-btn" href="/reset">&#x1F527; Reparar pantalla</a>
+
   <div class="card">
     <div class="logo">&#x2601;&#xFE0F;</div>
     <h1>La Nube</h1>
@@ -61,18 +81,14 @@
     <div class="status" id="status">Pasa tu tarjeta para ingresar</div>
     <div class="uid" id="uid"></div>
   </div>
-  <a class="fallback" href="{{ nextcloud_url }}/login">&#xBF;Sin tarjeta? Entrar con usuario y contrase&#xF1;a</a>
+
+  <a class="fallback" href="{{ nextcloud_url }}/login">Sin tarjeta &rarr;</a>
 
   <script>
-    // Instalar el SW permanente del kiosko.
-    // - En browsers limpios (sin SW viejo): se instala directo y protege el scope /.
-    // - Si habia un SW de Nextcloud: skipWaiting lo reemplaza inmediatamente.
-    // - Si el SW viejo intercepto la pagina antes de que este JS corra:
-    //   el usuario debe usar /reset una vez; despues esto ya funciona.
+    // Instalar el SW permanente del kiosko para mantener el scope / ocupado.
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw-kiosk.js', { scope: '/' }).catch(() => {});
     }
-    // Limpiar caches de versiones anteriores del kiosko
     if (window.caches) {
       caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
     }

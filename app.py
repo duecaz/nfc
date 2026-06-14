@@ -30,6 +30,27 @@ USERS_FILE = Path(__file__).parent / "users.json"
 REQUESTTOKEN_RE = re.compile(r'name="requesttoken"\s+value="([^"]+)"')
 HEAD_TOKEN_RE   = re.compile(r'data-requesttoken="([^"]+)"')
 
+_CLEANUP_JS = """\
+(async()=>{
+  const st=document.getElementById('st');
+  if('serviceWorker' in navigator){
+    try{const r=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(r.map(x=>x.unregister()));}
+    catch(e){}
+  }
+  if(window.caches){try{const k=await caches.keys();
+    await Promise.all(k.map(x=>caches.delete(x)));}
+    catch(e){}}
+  try{localStorage.clear();sessionStorage.clear();}catch(e){}
+  if('serviceWorker' in navigator){
+    try{await navigator.serviceWorker.register('/sw.js',{scope:'/'});
+      await new Promise(r=>setTimeout(r,800));}catch(e){}
+  }
+  if(st) st.textContent='✅ Listo, abriendo kiosko...';
+  setTimeout(()=>{window.location.replace('/');},1200);
+})();
+"""
+
 
 def load_users():
     if USERS_FILE.exists():
@@ -45,6 +66,33 @@ def save_users(users):
 def get_requesttoken(html):
     m = REQUESTTOKEN_RE.search(html) or HEAD_TOKEN_RE.search(html)
     return m.group(1) if m else None
+
+
+def _cleanup_page(title, subtitle):
+    """Devuelve una Response con pagina de limpieza automatica de SW/cache."""
+    html = f"""<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title></head>
+<body style="background:#0a2540;color:#fff;font-family:sans-serif;
+            display:flex;flex-direction:column;align-items:center;
+            justify-content:center;min-height:100vh;padding:2rem;text-align:center">
+  <div style="font-size:5rem;margin-bottom:1.5rem">&#x1F527;</div>
+  <h1 style="font-size:2rem;margin-bottom:.75rem">{title}</h1>
+  <p id="st" style="font-size:1.2rem;opacity:.8;margin-bottom:2.5rem">{subtitle}</p>
+  <a href="/" onclick="document.getElementById('btn').style.display='none'"
+     id="btn"
+     style="display:inline-block;padding:1.2rem 3rem;background:#3ddc97;
+            color:#0a2540;border-radius:16px;text-decoration:none;
+            font-size:1.4rem;font-weight:700;margin-top:.5rem">
+    &#x1F9F9; Reparar y abrir kiosko
+  </a>
+  <script>{_CLEANUP_JS}</script>
+</body></html>"""
+    resp = make_response(html)
+    resp.headers["Clear-Site-Data"] = '"cache", "cookies", "storage"'
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -187,41 +235,46 @@ def health():
 
 
 # ---------------------------------------------------------------------------
+# Intercepcion de rutas de Nextcloud (SW viejo redirige aqui)
+# ---------------------------------------------------------------------------
+
+@app.route("/index.php", defaults={"subpath": ""})
+@app.route("/index.php/<path:subpath>")
+def nextcloud_catch(subpath):
+    """
+    El SW viejo de Nextcloud redirige navegaciones a /index.php/login
+    (u otras rutas de Nextcloud). Como el SW hace network-fallthrough
+    para rutas no cacheadas, esta request llega a Flask.
+
+    En vez de devolver 404, servimos una pagina de auto-limpieza que:
+    - Desregistra todos los SWs del browser
+    - Limpia caches y storage
+    - Redirige automaticamente al kiosko
+    - Muestra un boton 'Reparar' por si el auto-redirect falla
+
+    El usuario no necesita escribir ninguna URL ni saber que paso.
+    """
+    return _cleanup_page(
+        title="Reparando pantalla…",
+        subtitle="Se detectó un problema de caché. Limpiando automáticamente…",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Service workers
 # ---------------------------------------------------------------------------
 
 @app.route("/sw-kiosk.js")
 def sw_kiosk_js():
-    """
-    SW PERMANENTE del kiosko.
-
-    Se instala en el scope '/' de lanube.uno y lo mantiene ocupado.
-    Una vez instalado, ningun SW externo (ej: Nextcloud viejo) puede
-    volver a tomar el control porque solo puede ser reemplazado por
-    otro SW registrado en el mismo scope.
-
-    Caracteristicas:
-    - Passthrough puro: NO cachea nada, todo pasa al servidor Flask.
-    - skipWaiting: se activa inmediatamente si habia un SW anterior.
-    - clients.claim: toma el control de todas las pestanas abiertas.
-    - Sirve con Cache-Control: no-store para que el browser siempre
-      lo re-descargue y detecte si cambia.
-    """
+    """SW permanente del kiosko: passthrough puro, mantiene el scope / ocupado."""
     js = """\
 // Kiosko SW permanente - La Nube NFC
-// Passthrough puro. Mantiene el scope / ocupado para prevenir SWs externos.
 self.addEventListener('install', (e) => {
     self.skipWaiting();
-    // Limpiar caches viejos (ej: del Nextcloud anterior)
     e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
 });
-self.addEventListener('activate', (e) => {
-    e.waitUntil(self.clients.claim());
-});
-// Passthrough puro - delega todo al servidor, no cachea nada
-self.addEventListener('fetch', (e) => {
-    e.respondWith(fetch(e.request));
-});
+self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
+self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 """
     resp = make_response(js)
     resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
@@ -232,11 +285,7 @@ self.addEventListener('fetch', (e) => {
 
 @app.route("/sw.js")
 def sw_js():
-    """
-    SW AUTO-DESTRUCTOR (solo usado por /reset).
-    Toma control inmediatamente, borra caches y se desregistra.
-    No navega clientes para evitar el bucle /reset -> /reset.
-    """
+    """SW auto-destructor: usado por /reset para SWs en estado 'waiting'."""
     js = """\
 // Auto-destructor SW - La Nube kiosko NFC
 self.addEventListener('install', (e) => {
@@ -257,55 +306,11 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 
 @app.route("/reset")
 def reset():
-    """
-    Limpieza de emergencia para pantallas atascadas por SW fantasma.
-    Acceder escribiendo  lanube.uno/reset  en la barra de URLs.
-    NO requiere F12 ni DevTools.
-    Despues de /reset, el SW permanente del kiosko (/sw-kiosk.js)
-    se instala automaticamente en la siguiente carga de / para
-    prevenir que el problema vuelva a ocurrir.
-    """
-    html = """<!DOCTYPE html>
-<html lang="es"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Reparando…</title></head>
-<body style="background:#0a2540;color:#fff;font-family:sans-serif;
-            text-align:center;padding:20vh 1rem 0">
-<h1>&#x1F9F9; Limpiando pantalla…</h1>
-<p id="st" style="opacity:.8;font-size:1.2rem;margin-top:1rem">Iniciando…</p>
-<div id="btn" style="display:none;margin-top:2.5rem">
-  <a href="/" style="display:inline-block;padding:1rem 2.5rem;background:#3ddc97;
-     color:#0a2540;border-radius:12px;text-decoration:none;font-size:1.3rem;
-     font-weight:700">Abrir kiosko NFC &#x2192;</a>
-</div>
-<script>
-(async()=>{
-  const st=document.getElementById('st'),btn=document.getElementById('btn'),log=[];
-  // 1. Desregistrar todos los SWs activos
-  if('serviceWorker' in navigator){
-    try{const r=await navigator.serviceWorker.getRegistrations();
-      await Promise.all(r.map(x=>x.unregister()));log.push('SW:'+r.length);}catch(e){}
-  }
-  // 2. Limpiar caches
-  if(window.caches){try{const k=await caches.keys();
-    await Promise.all(k.map(x=>caches.delete(x)));log.push('Cache:'+k.length);}catch(e){}}
-  // 3. Limpiar storage
-  try{localStorage.clear();sessionStorage.clear();}catch(e){}
-  // 4. SW destructor para SWs en estado 'waiting'
-  if('serviceWorker' in navigator){
-    try{await navigator.serviceWorker.register('/sw.js',{scope:'/'});
-      await new Promise(r=>setTimeout(r,800));log.push('Destructor:OK');}catch(e){}
-  }
-  st.textContent='✅ '+log.join(' · ');
-  btn.style.display='block';
-  // Auto-redirige a / donde el SW permanente del kiosko se instala
-  setTimeout(()=>{window.location.replace('/');},2000);
-})();
-</script></body></html>"""
-    resp = make_response(html)
-    resp.headers["Clear-Site-Data"] = '"cache", "cookies", "storage"'
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    return resp
+    """Limpieza de emergencia. Accesible desde el boton de la pantalla del kiosko."""
+    return _cleanup_page(
+        title="Reparando pantalla…",
+        subtitle="Limpiando caché y service workers…",
+    )
 
 
 # ---------------------------------------------------------------------------
