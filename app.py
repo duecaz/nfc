@@ -69,7 +69,7 @@ def get_requesttoken(html):
 
 
 def _cleanup_page(title, subtitle):
-    """Devuelve una Response con pagina de limpieza automatica de SW/cache."""
+    """Pagina de limpieza de emergencia (solo para /reset)."""
     html = f"""<!DOCTYPE html>
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -142,7 +142,8 @@ def admin_logout():
 
 @app.route("/")
 def index():
-    return render_template("index.html", nextcloud_url=NEXTCLOUD_PUBLIC_URL)
+    return render_template("index.html", nextcloud_url=NEXTCLOUD_PUBLIC_URL,
+                           auto_repair=False)
 
 
 @app.route("/auth", methods=["POST"])
@@ -241,35 +242,24 @@ def health():
 @app.route("/login")
 def login_catch():
     """
-    Si el SW viejo redirige a /login (sin /index.php), Flask lo intercepta
-    y muestra la pagina de limpieza en vez de un 404.
+    El SW viejo puede redirigir a /login. Servimos el kiosko directamente
+    con limpieza silenciosa de SW en segundo plano.
     """
-    return _cleanup_page(
-        title="Reparando pantalla…",
-        subtitle="Se detectó un problema de caché. Limpiando automáticamente…",
-    )
+    return render_template("index.html", nextcloud_url=NEXTCLOUD_PUBLIC_URL,
+                           auto_repair=True)
 
 
 @app.route("/index.php", defaults={"subpath": ""})
 @app.route("/index.php/<path:subpath>")
 def nextcloud_catch(subpath):
     """
-    El SW viejo de Nextcloud redirige navegaciones a /index.php/login
-    (u otras rutas de Nextcloud). Como el SW hace network-fallthrough
-    para rutas no cacheadas, esta request llega a Flask.
-
-    En vez de devolver 404, servimos una pagina de auto-limpieza que:
-    - Desregistra todos los SWs del browser
-    - Limpia caches y storage
-    - Redirige automaticamente al kiosko
-    - Muestra un boton 'Reparar' por si el auto-redirect falla
-
-    El usuario no necesita escribir ninguna URL ni saber que paso.
+    El SW viejo redirige a /index.php/login (y otras rutas de Nextcloud).
+    En vez de mostrar una pagina de error o reparacion, servimos el kiosko
+    directamente. El JS de auto_repair limpia el SW en segundo plano y
+    corrige la URL a / sin recargar.
     """
-    return _cleanup_page(
-        title="Reparando pantalla…",
-        subtitle="Se detectó un problema de caché. Limpiando automáticamente…",
-    )
+    return render_template("index.html", nextcloud_url=NEXTCLOUD_PUBLIC_URL,
+                           auto_repair=True)
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +308,7 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 
 @app.route("/reset")
 def reset():
-    """Limpieza de emergencia. Accesible desde el boton de la pantalla del kiosko."""
+    """Limpieza de emergencia manual. Solo se usa desde el boton 'Reparar'."""
     return _cleanup_page(
         title="Reparando pantalla…",
         subtitle="Limpiando caché y service workers…",

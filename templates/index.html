@@ -38,25 +38,15 @@
     .status.err { color: #ff6b6b; }
     .uid { font-family: monospace; font-size: 1.1rem; opacity: .7; margin-top: .5rem; }
 
-    /* Boton de reparar: fijo abajo a la izquierda, grande para touch */
     .repair-btn {
-      position: fixed;
-      bottom: 1.5rem;
-      left: 1.5rem;
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.2);
-      color: rgba(255,255,255,.7);
-      font-size: 1.05rem;
-      padding: .9rem 1.4rem;
-      border-radius: 14px;
-      text-decoration: none;
-      cursor: pointer;
-      min-width: 180px;
-      text-align: center;
+      position: fixed; bottom: 1.5rem; left: 1.5rem;
+      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2);
+      color: rgba(255,255,255,.7); font-size: 1.05rem;
+      padding: .9rem 1.4rem; border-radius: 14px;
+      text-decoration: none; cursor: pointer; min-width: 180px; text-align: center;
     }
     .repair-btn:active { background: rgba(255,255,255,.18); }
 
-    /* Link de login manual: fijo abajo a la derecha */
     .fallback {
       position: fixed; bottom: 1.5rem; right: 1.5rem;
       color: rgba(255,255,255,.55); font-size: .95rem;
@@ -64,14 +54,12 @@
     }
     .fallback:hover { color: #fff; }
 
-    /* Solo el campo invisible del lector NFC oculta el cursor */
     #catcher { position: absolute; opacity: 0; pointer-events: none; cursor: none; }
   </style>
 </head>
 <body>
   <input id="catcher" autocomplete="off" autofocus>
 
-  <!-- Boton de reparar: visible, grande, tocable en pantalla tactil -->
   <a class="repair-btn" href="/reset">&#x1F527; Reparar pantalla</a>
 
   <div class="card">
@@ -86,13 +74,31 @@
   <a class="fallback" href="{{ nextcloud_url }}/login">Sin tarjeta &rarr;</a>
 
   <script>
-    // Instalar el SW permanente del kiosko para mantener el scope / ocupado.
+    // Registrar SW permanente del kiosko.
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw-kiosk.js', { scope: '/' }).catch(() => {});
     }
-    if (window.caches) {
-      caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
-    }
+
+    {% if auto_repair %}
+    // Venimos de una URL de Nextcloud (SW viejo nos redirigió aquí).
+    // Limpiar en segundo plano sin interrumpir al usuario.
+    (async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+          await navigator.serviceWorker.register('/sw-kiosk.js', { scope: '/' });
+        }
+        if (window.caches) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}
+        // Corregir la URL a / sin recargar la página.
+        history.replaceState({}, '', '/');
+      } catch (e) {}
+    })();
+    {% endif %}
 
     const catcher  = document.getElementById('catcher');
     const statusEl = document.getElementById('status');
