@@ -6,13 +6,13 @@ services:
     ports:
       - "8200:5000"
     environment:
-      # URL INTERNA para el login server-side (192.168.1.50 debe estar en trusted_domains).
+      # URL INTERNA para el login server-side (192.168.1.50 en trusted_domains).
       - NEXTCLOUD_URL=http://192.168.1.50:8181
-      # --- PRODUCCION (descomentar al exponer en lanube.uno) ---
-      # URL publica a la que se redirige el navegador tras el login:
+      # --- PRODUCCION (descomentar) ---
       # - NEXTCLOUD_PUBLIC_URL=https://app.lanube.uno
-      # Dominio padre para compartir cookies entre kiosko y nextcloud (subdominios):
       # - COOKIE_DOMAIN=.lanube.uno
+      # Contrasena del panel /admin  (usuario siempre: admin)
+      - ADMIN_PASSWORD=cambiar-esto-antes-de-produccion
     volumes:
-      # users.json editable sin reconstruir la imagen (mapa UID -> usuario).
+      # users.json editable sin reconstruir (mapa UID -> usuario + token).
       - ./users.json:/app/users.json
