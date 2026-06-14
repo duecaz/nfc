@@ -109,6 +109,7 @@
     .badge.token    { background: #052e16; color: #86efac; }
     .badge.password { background: #422006; color: #fdba74; }
     .empty { color: #475569; font-size: .95rem; text-align: center; padding: 1.5rem 0; }
+    footer { margin-top: 2.5rem; text-align: center; color: #334155; font-size: .75rem; }
   </style>
 </head>
 <body>
@@ -182,6 +183,8 @@
 
   </div>
 
+  <footer>La Nube NFC &mdash; v{{ version }}</footer>
+
   <script>
   "use strict";
 
@@ -198,7 +201,7 @@
 
   scanBtn.addEventListener('click', () => {
     scanning = true;
-    scanBtn.textContent = '⏳ Acerá la tarjeta…';
+    scanBtn.textContent = '⏳ Acercá la tarjeta…';
     scanBtn.classList.add('scanning');
     uidCapture.value = '';
     uidCapture.focus();
@@ -233,7 +236,7 @@
     const username     = document.getElementById('nc_user').value.trim();
     const nc_password  = document.getElementById('nc_pass').value.trim();
     if (!username || !nc_password) { showMsg('Completá usuario y contraseña NC.', 'err'); return; }
-    if (!currentUid)              { showMsg('Escaná la tarjeta primero.', 'err'); return; }
+    if (!currentUid)              { showMsg('Escaneá la tarjeta primero.', 'err'); return; }
 
     regBtn.disabled = true;
     showMsg('Generando token en Nextcloud…', 'info');

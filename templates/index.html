@@ -54,6 +54,11 @@
     }
     .fallback:hover { color: #fff; }
 
+    .ver {
+      position: fixed; bottom: .5rem; left: 50%; transform: translateX(-50%);
+      font-size: .7rem; opacity: .3; pointer-events: none;
+    }
+
     #catcher { position: absolute; opacity: 0; pointer-events: none; cursor: none; }
   </style>
 </head>
@@ -72,16 +77,14 @@
   </div>
 
   <a class="fallback" href="{{ nextcloud_url }}/login">Sin tarjeta &rarr;</a>
+  <span class="ver">v{{ version }}</span>
 
   <script>
-    // Registrar SW permanente del kiosko.
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw-kiosk.js', { scope: '/' }).catch(() => {});
     }
 
     {% if auto_repair %}
-    // Venimos de una URL de Nextcloud (SW viejo nos redirigió aquí).
-    // Limpiar en segundo plano sin interrumpir al usuario.
     (async () => {
       try {
         if ('serviceWorker' in navigator) {
@@ -94,7 +97,6 @@
           await Promise.all(keys.map(k => caches.delete(k)));
         }
         try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}
-        // Corregir la URL a / sin recargar la página.
         history.replaceState({}, '', '/');
       } catch (e) {}
     })();

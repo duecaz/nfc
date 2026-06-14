@@ -17,6 +17,7 @@ from flask import (
 
 app = Flask(__name__)
 
+VERSION              = "2026-06-14.5"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -24,6 +25,9 @@ COOKIE_SECURE        = NEXTCLOUD_PUBLIC_URL.startswith("https")
 ADMIN_PASSWORD       = os.environ.get("ADMIN_PASSWORD", "admin1234")
 
 _ADMIN_SESSION = secrets.token_hex(32)
+
+# VERSION disponible en todos los templates sin pasarlo manualmente.
+app.jinja_env.globals["version"] = VERSION
 
 USERS_FILE = Path(__file__).parent / "users.json"
 
@@ -88,6 +92,7 @@ def _cleanup_page(title, subtitle):
     &#x1F9F9; Reparar y abrir kiosko
   </a>
   <script>{_CLEANUP_JS}</script>
+  <p style="position:fixed;bottom:.75rem;right:1rem;font-size:.75rem;opacity:.35">v{VERSION}</p>
 </body></html>"""
     resp = make_response(html)
     resp.headers["Clear-Site-Data"] = '"cache", "cookies", "storage"'
@@ -225,6 +230,7 @@ def health():
     users = load_users()
     return jsonify(
         ok=True,
+        version=VERSION,
         users=len(users),
         con_token=sum(1 for v in users.values() if v.get("token")),
         con_password=sum(1 for v in users.values()
@@ -254,9 +260,8 @@ def login_catch():
 def nextcloud_catch(subpath):
     """
     El SW viejo redirige a /index.php/login (y otras rutas de Nextcloud).
-    En vez de mostrar una pagina de error o reparacion, servimos el kiosko
-    directamente. El JS de auto_repair limpia el SW en segundo plano y
-    corrige la URL a / sin recargar.
+    Servimos el kiosko directamente; el JS de auto_repair limpia el SW
+    en segundo plano y corrige la URL a / sin recargar.
     """
     return render_template("index.html", nextcloud_url=NEXTCLOUD_PUBLIC_URL,
                            auto_repair=True)
