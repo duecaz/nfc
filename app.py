@@ -1,4 +1,4 @@
-""" 
+"""
 Kiosko NFC -> Nextcloud (lanube.uno)
 """
 import json
@@ -17,7 +17,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-15.1"
+VERSION              = "2026-06-15.2"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -91,6 +91,58 @@ def _get_app_token(username, nc_password):
     if statuscode != "200" or app_pw_el is None:
         return None, root.findtext(".//message") or "Credenciales incorrectas"
     return app_pw_el.text, None
+
+
+def _nc_login(username, password):
+    """
+    Autentica usuario en Nextcloud. Devuelve (session, error).
+    session es un requests.Session con las cookies ya seteadas si OK.
+    """
+    s = requests.Session()
+    s.headers.update({"User-Agent": "Mozilla/5.0 (kiosk)"})
+    try:
+        login_page = s.get(f"{NEXTCLOUD_URL}/login", timeout=15)
+    except requests.RequestException as exc:
+        return None, f"No se pudo contactar Nextcloud: {exc}"
+
+    token = get_requesttoken(login_page.text)
+    if not token:
+        return None, "Error interno al obtener requesttoken"
+
+    resp = s.post(
+        f"{NEXTCLOUD_URL}/login",
+        data={
+            "user": username,
+            "password": password,
+            "requesttoken": token,
+            "timezone": "America/Lima",
+            "timezone_offset": "-5",
+            "rememberme": "true",
+        },
+        headers={
+            "requesttoken": token,
+            "Origin": NEXTCLOUD_PUBLIC_URL,
+            "Referer": f"{NEXTCLOUD_PUBLIC_URL}/login",
+        },
+        allow_redirects=False,
+        timeout=10,
+    )
+
+    location = resp.headers.get("Location", "")
+    if "/login" in location or resp.status_code not in (301, 302, 303):
+        return None, "Usuario o contraseña incorrectos"
+
+    return s, None
+
+
+def _apply_nc_cookies(out_resp, nc_session):
+    """Copia las cookies de NC al response de Flask."""
+    for c in nc_session.cookies:
+        if COOKIE_DOMAIN and c.name.startswith("__Host-"):
+            continue
+        out_resp.set_cookie(c.name, c.value, path="/", httponly=True,
+                            samesite="Lax", domain=COOKIE_DOMAIN,
+                            secure=COOKIE_SECURE)
 
 
 def _cleanup_page(title, subtitle):
@@ -189,47 +241,13 @@ def auth():
     if not credential:
         return jsonify(ok=False, error="Sin credencial configurada"), 500
 
-    s = requests.Session()
-    s.headers.update({"User-Agent": "Mozilla/5.0 (kiosk)"})
-    try:
-        login_page = s.get(f"{NEXTCLOUD_URL}/login", timeout=15)
-    except requests.RequestException as exc:
-        print(f"[AUTH] ERROR contacto NC: {exc}", flush=True)
-        return jsonify(ok=False, error=f"No se pudo contactar Nextcloud: {exc}"), 502
-
-    token = get_requesttoken(login_page.text)
-    if not token:
-        print("[AUTH] ERROR: no se encontro requesttoken", flush=True)
-        return jsonify(ok=False, error="No se obtuvo requesttoken"), 502
-
     cred_type = "token" if using_token else "password"
     print(f"[AUTH] user={username} cred={cred_type}", flush=True)
 
-    resp = s.post(
-        f"{NEXTCLOUD_URL}/login",
-        data={
-            "user": username,
-            "password": credential,
-            "requesttoken": token,
-            "timezone": "America/Lima",
-            "timezone_offset": "-5",
-            "rememberme": "true",
-        },
-        headers={
-            "requesttoken": token,
-            "Origin": NEXTCLOUD_PUBLIC_URL,
-            "Referer": f"{NEXTCLOUD_PUBLIC_URL}/login",
-        },
-        allow_redirects=False,
-        timeout=10,
-    )
-
-    location = resp.headers.get("Location", "")
-    print(f"[AUTH] POST /login -> {resp.status_code} location={location!r}", flush=True)
-
-    if "/login" in location or resp.status_code not in (301, 302, 303):
-        print(f"[AUTH] RECHAZADO user={username}", flush=True)
-        return jsonify(ok=False, error="Credenciales rechazadas por Nextcloud"), 401
+    s, err = _nc_login(username, credential)
+    if err:
+        print(f"[AUTH] RECHAZADO user={username}: {err}", flush=True)
+        return jsonify(ok=False, error=err), 401
 
     print(f"[AUTH] OK user={username}", flush=True)
     out = make_response(jsonify(
@@ -237,11 +255,35 @@ def auth():
         redirect=f"{NEXTCLOUD_PUBLIC_URL}/apps/files",
         user=username,
     ))
-    for c in s.cookies:
-        if COOKIE_DOMAIN and c.name.startswith("__Host-"):
-            continue
-        out.set_cookie(c.name, c.value, path="/", httponly=True, samesite="Lax",
-                       domain=COOKIE_DOMAIN, secure=COOKIE_SECURE)
+    _apply_nc_cookies(out, s)
+    return out
+
+
+@app.route("/login-manual", methods=["GET"])
+def login_manual():
+    error   = request.args.get("error", "")
+    prefill = request.args.get("user", "")
+    return render_template("login_manual.html", error=error, prefill=prefill)
+
+
+@app.route("/auth-form", methods=["POST"])
+def auth_form():
+    username = (request.form.get("username") or "").strip()
+    password = (request.form.get("password") or "").strip()
+
+    if not username or not password:
+        return redirect(url_for("login_manual", error="Ingresá usuario y contraseña",
+                                user=username))
+
+    print(f"[AUTH-FORM] user={username}", flush=True)
+    s, err = _nc_login(username, password)
+    if err:
+        print(f"[AUTH-FORM] RECHAZADO user={username}: {err}", flush=True)
+        return redirect(url_for("login_manual", error=err, user=username))
+
+    print(f"[AUTH-FORM] OK user={username}", flush=True)
+    out = make_response(redirect(f"{NEXTCLOUD_PUBLIC_URL}/apps/files"))
+    _apply_nc_cookies(out, s)
     return out
 
 

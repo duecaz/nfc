@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Ingresar · La Nube</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: linear-gradient(135deg, #0a2540 0%, #134e6f 100%);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 1.5rem;
+    }
+    .card {
+      text-align: center; width: 100%; max-width: 420px;
+    }
+    .logo {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: rgba(255,255,255,.1); margin: 0 auto 1.5rem;
+      display: flex; align-items: center; justify-content: center; font-size: 54px;
+    }
+    h1 { font-size: 2.2rem; margin-bottom: .3rem; font-weight: 600; }
+    p.sub { font-size: 1.05rem; opacity: .7; margin-bottom: 2rem; }
+
+    .form-box {
+      background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px; padding: 2rem 1.75rem; text-align: left;
+    }
+    label {
+      display: block; font-size: .85rem; opacity: .7;
+      margin-bottom: .4rem; margin-top: 1.25rem;
+    }
+    label:first-of-type { margin-top: 0; }
+    input[type="text"], input[type="password"] {
+      width: 100%; padding: .9rem 1.1rem;
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.2);
+      border-radius: 12px; color: #fff; font-size: 1.1rem;
+      outline: none; transition: border-color .15s;
+      -webkit-text-fill-color: #fff;
+    }
+    input:focus { border-color: #3ddc97; }
+    input::placeholder { opacity: .4; }
+
+    .error-box {
+      background: rgba(255,80,80,.15); border: 1px solid rgba(255,100,100,.3);
+      border-radius: 10px; padding: .8rem 1rem; font-size: .95rem;
+      color: #ff9a9a; margin-bottom: 1.25rem; text-align: center;
+    }
+
+    .btn-submit {
+      width: 100%; margin-top: 1.5rem; padding: 1.1rem;
+      background: #3ddc97; color: #071526;
+      border: none; border-radius: 14px;
+      font-size: 1.15rem; font-weight: 700;
+      cursor: pointer; transition: filter .15s;
+    }
+    .btn-submit:hover { filter: brightness(1.08); }
+    .btn-submit:active { filter: brightness(.95); }
+    .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+    .back-link {
+      display: block; margin-top: 1.5rem; text-align: center;
+      color: rgba(255,255,255,.5); font-size: .95rem; text-decoration: none;
+    }
+    .back-link:hover { color: #fff; }
+
+    .ver {
+      position: fixed; bottom: .5rem; left: 50%; transform: translateX(-50%);
+      font-size: .7rem; opacity: .3; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">&#x2601;&#xFE0F;</div>
+    <h1>La Nube</h1>
+    <p class="sub">Ingresar con usuario y contraseña</p>
+
+    <div class="form-box">
+      {% if error %}
+      <div class="error-box">&#x274C; {{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="/auth-form" id="login-form">
+        <label for="username">Usuario</label>
+        <input id="username" name="username" type="text"
+               placeholder="Ej: jperez"
+               autocomplete="username" autocapitalize="none"
+               autocorrect="off" spellcheck="false"
+               value="{{ prefill or '' }}" required>
+
+        <label for="password">Contraseña</label>
+        <input id="password" name="password" type="password"
+               placeholder="Contraseña"
+               autocomplete="current-password" required>
+
+        <button class="btn-submit" type="submit" id="submit-btn">
+          Ingresar
+        </button>
+      </form>
+    </div>
+
+    <a class="back-link" href="/">&larr; Volver al kiosko de tarjetas</a>
+  </div>
+  <span class="ver">v{{ version }}</span>
+
+  <script>
+  document.getElementById('login-form').addEventListener('submit', () => {
+    document.getElementById('submit-btn').disabled = true;
+    document.getElementById('submit-btn').textContent = 'Ingresando…';
+  });
+  // Auto-focus username if empty, else password
+  const u = document.getElementById('username');
+  const p = document.getElementById('password');
+  if (u.value) { p.focus(); } else { u.focus(); }
+  </script>
+</body>
+</html>
