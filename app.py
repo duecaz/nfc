@@ -17,7 +17,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-15.2"
+VERSION              = "2026-06-15.3"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -95,8 +95,8 @@ def _get_app_token(username, nc_password):
 
 def _nc_login(username, password):
     """
-    Autentica usuario en Nextcloud. Devuelve (session, error).
-    session es un requests.Session con las cookies ya seteadas si OK.
+    Autentica usuario en Nextcloud via formulario web.
+    Devuelve (session, error). session tiene las cookies de NC si OK.
     """
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0 (kiosk)"})
@@ -481,7 +481,6 @@ def admin_bulk():
 def admin_create_nc_users():
     """
     Crea cuentas en Nextcloud en lote.
-    Requiere credenciales de admin de NC.
     CSV: usuario,contrasena[,nombre_completo][,email]
     """
     nc_admin_user = (request.form.get("nc_admin_user") or "").strip()

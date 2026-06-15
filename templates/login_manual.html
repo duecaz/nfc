@@ -34,15 +34,36 @@
       margin-bottom: .4rem; margin-top: 1.25rem;
     }
     label:first-of-type { margin-top: 0; }
+
+    .input-wrap { position: relative; }
     input[type="text"], input[type="password"] {
       width: 100%; padding: .9rem 1.1rem;
       background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.2);
       border-radius: 12px; color: #fff; font-size: 1.1rem;
       outline: none; transition: border-color .15s;
-      -webkit-text-fill-color: #fff;
     }
+    input[type="password"] { padding-right: 3.2rem; }
     input:focus { border-color: #3ddc97; }
-    input::placeholder { opacity: .4; }
+    input::placeholder { opacity: .4; color: #fff; }
+
+    /* Fix autocomplete/autofill background */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+      -webkit-box-shadow: 0 0 0 50px #0d2d4a inset !important;
+      -webkit-text-fill-color: #fff !important;
+      caret-color: #fff;
+      transition: background-color 9999s ease-in-out 0s;
+    }
+
+    .eye-btn {
+      position: absolute; right: .85rem; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,.45); font-size: 1.2rem;
+      padding: .25rem; line-height: 1;
+      transition: color .15s;
+    }
+    .eye-btn:hover { color: rgba(255,255,255,.85); }
 
     .error-box {
       background: rgba(255,80,80,.15); border: 1px solid rgba(255,100,100,.3);
@@ -86,16 +107,24 @@
 
       <form method="POST" action="/auth-form" id="login-form">
         <label for="username">Usuario</label>
-        <input id="username" name="username" type="text"
-               placeholder="Ej: jperez"
-               autocomplete="username" autocapitalize="none"
-               autocorrect="off" spellcheck="false"
-               value="{{ prefill or '' }}" required>
+        <div class="input-wrap">
+          <input id="username" name="username" type="text"
+                 placeholder="Ej: jperez"
+                 autocomplete="username" autocapitalize="none"
+                 autocorrect="off" spellcheck="false"
+                 value="{{ prefill or '' }}" required>
+        </div>
 
         <label for="password">Contraseña</label>
-        <input id="password" name="password" type="password"
-               placeholder="Contraseña"
-               autocomplete="current-password" required>
+        <div class="input-wrap">
+          <input id="password" name="password" type="password"
+                 placeholder="Contraseña"
+                 autocomplete="current-password" required>
+          <button type="button" class="eye-btn" id="eye-btn"
+                  aria-label="Mostrar contraseña">
+            &#x1F441;
+          </button>
+        </div>
 
         <button class="btn-submit" type="submit" id="submit-btn">
           Ingresar
@@ -108,11 +137,23 @@
   <span class="ver">v{{ version }}</span>
 
   <script>
+  // Toggle ojito contraseña
+  const eyeBtn  = document.getElementById('eye-btn');
+  const passEl  = document.getElementById('password');
+  eyeBtn.addEventListener('click', () => {
+    const show = passEl.type === 'password';
+    passEl.type = show ? 'text' : 'password';
+    eyeBtn.textContent = show ? '🙈' : '👁';
+    passEl.focus();
+  });
+
+  // Deshabilitar botón al enviar
   document.getElementById('login-form').addEventListener('submit', () => {
     document.getElementById('submit-btn').disabled = true;
     document.getElementById('submit-btn').textContent = 'Ingresando…';
   });
-  // Auto-focus username if empty, else password
+
+  // Auto-focus: si hay usuario prefill, ir al campo de contraseña
   const u = document.getElementById('username');
   const p = document.getElementById('password');
   if (u.value) { p.focus(); } else { u.focus(); }
