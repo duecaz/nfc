@@ -42,6 +42,13 @@
       outline: none; transition: border-color .15s;
     }
     input:focus { border-color: #38bdf8; }
+    textarea {
+      width: 100%; padding: .75rem 1rem; resize: vertical;
+      background: #0a1e38; border: 1px solid #2d5080;
+      border-radius: 10px; color: #e2e8f0; font-size: .9rem;
+      font-family: monospace; outline: none; transition: border-color .15s;
+    }
+    textarea:focus { border-color: #38bdf8; }
 
     .uid-zone {
       margin-top: 1rem; background: #071526;
@@ -66,6 +73,7 @@
     .btn-scan  { background: #1e3a5f; color: #e2e8f0; }
     .btn-scan.scanning { background: #0f3460; color: #38bdf8; }
     .btn-save  { background: #3ddc97; color: #071526; }
+    .btn-bulk  { background: #7c3aed; color: #fff; }
     .btn-del   {
       width: auto; padding: .4rem .9rem; font-size: .85rem;
       background: #450a0a; color: #fca5a5;
@@ -88,7 +96,6 @@
     .msg.err  { background: #450a0a; color: #fca5a5; }
     .msg.info { background: #0c2a4a; color: #7dd3fc; }
 
-    /* Lista de tarjetas */
     .card-list { display: flex; flex-direction: column; gap: .75rem; }
     .card-entry { border-radius: 10px; overflow: hidden; }
     .card-row {
@@ -99,7 +106,6 @@
     .card-entry .card-row { border-radius: 0; }
     .card-entry .card-row:first-child { border-radius: 10px 10px 0 0; }
     .card-entry:not(.editing) .card-row:first-child { border-radius: 10px; }
-
     .card-info { flex: 1; min-width: 0; }
     .card-name { font-weight: 600; font-size: 1rem; white-space: nowrap;
                  overflow: hidden; text-overflow: ellipsis; }
@@ -113,27 +119,30 @@
     .badge.password { background: #422006; color: #fdba74; }
     .empty { color: #475569; font-size: .95rem; text-align: center; padding: 1.5rem 0; }
 
-    /* Panel de edición inline */
     .edit-panel {
-      display: none;
-      background: #040f1e;
+      display: none; background: #040f1e;
       border: 1px solid #1e3a5f; border-top: none;
-      border-radius: 0 0 10px 10px;
-      padding: 1rem 1rem 1.2rem;
+      border-radius: 0 0 10px 10px; padding: 1rem 1rem 1.2rem;
     }
     .card-entry.editing .edit-panel { display: block; }
     .edit-panel label { margin-top: .75rem; }
     .edit-panel label:first-of-type { margin-top: 0; }
     .edit-panel small { color: #475569; font-weight: 400; }
-    .edit-actions {
-      display: flex; gap: .6rem; margin-top: .85rem;
-    }
-    .edit-actions .btn {
-      flex: 1; padding: .65rem .8rem; font-size: .9rem; margin-top: 0;
-    }
-    .btn-save-ep  { background: #3ddc97; color: #071526; }
+    .edit-actions { display: flex; gap: .6rem; margin-top: .85rem; }
+    .edit-actions .btn { flex: 1; padding: .65rem .8rem; font-size: .9rem; margin-top: 0; }
+    .btn-save-ep   { background: #3ddc97; color: #071526; }
     .btn-cancel-ep { background: #1e3a5f; color: #94a3b8; }
     .ep-msg { margin-top: .6rem; font-size: .85rem; min-height: 1.2rem; }
+
+    /* Resultados bulk */
+    .bulk-row {
+      padding: .35rem 0; border-bottom: 1px solid #0f2442;
+      font-size: .85rem; font-family: monospace;
+    }
+    .bulk-row:last-child { border-bottom: none; }
+    .bulk-summary {
+      margin-top: .75rem; font-size: .9rem; font-weight: 600;
+    }
 
     footer { margin-top: 2.5rem; text-align: center; color: #334155; font-size: .75rem; }
   </style>
@@ -152,9 +161,6 @@
     <!-- ====== NUEVA TARJETA ====== -->
     <div class="card">
       <h2>Nueva tarjeta</h2>
-
-      <label for="display_name">Nombre del docente</label>
-      <input id="display_name" type="text" placeholder="Ej: Juan P&eacute;rez" autocomplete="off">
 
       <label for="nc_user">Usuario en Nextcloud</label>
       <input id="nc_user" type="text" placeholder="Ej: jperez" autocomplete="off" autocapitalize="none">
@@ -181,7 +187,6 @@
         Tarjetas registradas
         <span style="color:#38bdf8;font-size:.95rem" id="count">({{ users|length }})</span>
       </h2>
-
       <div class="card-list" id="card-list">
         {% for uid, info in users.items() %}
         <div class="card-entry" id="entry-{{ uid }}">
@@ -200,7 +205,7 @@
             <button class="btn btn-del"  data-uid="{{ uid }}">Eliminar</button>
           </div>
           <div class="edit-panel" id="ep-{{ uid }}">
-            <label>Nombre</label>
+            <label>Nombre para mostrar</label>
             <input type="text" class="ep-name" value="{{ info.get('name', info.get('user', '')) }}" autocomplete="off">
             <label>Contrase&ntilde;a NC para regenerar token <small>(dejar vac&iacute;o para no cambiar)</small></label>
             <input type="password" class="ep-pass" autocomplete="current-password">
@@ -219,12 +224,29 @@
 
   </div>
 
+  <!-- ====== CARGA MASIVA ====== -->
+  <div class="card" style="margin-top:1.5rem">
+    <h2>&#x26A1; Carga masiva</h2>
+    <p style="color:#64748b;font-size:.88rem;margin-bottom:1rem;line-height:1.6">
+      Pegá una línea por docente en formato <code style="color:#7dd3fc">uid,usuario,contraseña</code><br>
+      También acepta <code style="color:#7dd3fc">uid,usuario,contraseña,nombre</code> si querés un nombre diferente al usuario.<br>
+      Las líneas que empiezan con <code>#</code> se ignoran (podés usarlas como comentarios).
+    </p>
+    <textarea id="bulk-csv" rows="8"
+      placeholder="# Ejemplo:&#10;53A3A343300001,jperez,Profe2026!&#10;1234567890AB,mgarcia,Profe2026!,María García"></textarea>
+    <button class="btn btn-bulk" id="bulk-btn">&#x26A1; Procesar lote</button>
+    <div id="bulk-results" style="display:none;margin-top:1.25rem">
+      <h2>Resultados</h2>
+      <div id="bulk-list"></div>
+    </div>
+  </div>
+
   <footer>La Nube NFC &mdash; v{{ version }}</footer>
 
   <script>
   "use strict";
 
-  // ---- Registro nueva tarjeta ----
+  // ---- Registro tarjeta individual ----
   const scanBtn    = document.getElementById('scan-btn');
   const uidCapture = document.getElementById('uid-capture');
   const uidDisplay = document.getElementById('uid-display');
@@ -269,9 +291,8 @@
   }
 
   regBtn.addEventListener('click', async () => {
-    const display_name = document.getElementById('display_name').value.trim();
-    const username     = document.getElementById('nc_user').value.trim();
-    const nc_password  = document.getElementById('nc_pass').value.trim();
+    const username    = document.getElementById('nc_user').value.trim();
+    const nc_password = document.getElementById('nc_pass').value.trim();
     if (!username || !nc_password) { showMsg('Completá usuario y contraseña NC.', 'err'); return; }
     if (!currentUid)              { showMsg('Escaneá la tarjeta primero.', 'err'); return; }
 
@@ -281,25 +302,24 @@
     try {
       const r    = await fetch('/admin/register', {
         method: 'POST',
-        body: new URLSearchParams({ uid: currentUid, username, nc_password,
-                                    display_name: display_name || username }),
+        body: new URLSearchParams({ uid: currentUid, username, nc_password }),
       });
       const data = await r.json();
       if (data.ok) {
-        showMsg('✅ ' + (data.name || data.user) + ' registrado con token.', 'ok');
+        showMsg('✅ ' + data.user + ' registrado con token.', 'ok');
         appendCard(currentUid, data);
-        document.getElementById('display_name').value = '';
         document.getElementById('nc_user').value = '';
         document.getElementById('nc_pass').value = '';
         currentUid = '';
         uidDisplay.textContent = '— Sin escanear —';
         uidDisplay.classList.remove('ready');
         scanBtn.textContent = '\u{1F4C7} Escanear tarjeta';
+        regBtn.disabled = true;
       } else {
         showMsg('❌ ' + (data.error || 'Error desconocido'), 'err');
+        regBtn.disabled = false;
       }
-    } catch (e) { showMsg('Error de conexión.', 'err'); }
-    regBtn.disabled = false;
+    } catch (e) { showMsg('Error de conexión.', 'err'); regBtn.disabled = false; }
   });
 
   function appendCard(uid, data) {
@@ -319,7 +339,7 @@
         <button class="btn btn-del"  data-uid="${esc(uid)}">Eliminar</button>
       </div>
       <div class="edit-panel" id="ep-${esc(uid)}">
-        <label>Nombre</label>
+        <label>Nombre para mostrar</label>
         <input type="text" class="ep-name" value="${esc(data.name || data.user)}" autocomplete="off">
         <label>Contrase&ntilde;a NC para regenerar token <small>(dejar vacío para no cambiar)</small></label>
         <input type="password" class="ep-pass" autocomplete="current-password">
@@ -337,7 +357,7 @@
     updateCount();
   }
 
-  // ---- Editar tarjeta ----
+  // ---- Editar ----
   document.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', openEdit));
   document.querySelectorAll('.btn-save-ep').forEach(b => b.addEventListener('click', saveEdit));
   document.querySelectorAll('.btn-cancel-ep').forEach(b => b.addEventListener('click', cancelEdit));
@@ -346,26 +366,19 @@
     const uid   = e.currentTarget.dataset.uid;
     const entry = document.getElementById('entry-' + uid);
     const isOpen = entry.classList.contains('editing');
-    // Cerrar todos los paneles abiertos
     document.querySelectorAll('.card-entry.editing').forEach(el => el.classList.remove('editing'));
     if (!isOpen) entry.classList.add('editing');
   }
-
   function cancelEdit(e) {
-    document.getElementById('entry-' + e.currentTarget.dataset.uid)
-            .classList.remove('editing');
+    document.getElementById('entry-' + e.currentTarget.dataset.uid).classList.remove('editing');
   }
-
   async function saveEdit(e) {
     const uid   = e.currentTarget.dataset.uid;
     const panel = document.getElementById('ep-' + uid);
     const msgEl = document.getElementById('epmsg-' + uid);
     const name  = panel.querySelector('.ep-name').value.trim();
     const pass  = panel.querySelector('.ep-pass').value.trim();
-
-    msgEl.style.color = '#7dd3fc';
-    msgEl.textContent = 'Guardando…';
-
+    msgEl.style.color = '#7dd3fc'; msgEl.textContent = 'Guardando…';
     try {
       const r = await fetch('/admin/update', {
         method: 'POST',
@@ -373,8 +386,7 @@
       });
       const data = await r.json();
       if (data.ok) {
-        msgEl.style.color = '#86efac';
-        msgEl.textContent = '✅ Guardado';
+        msgEl.style.color = '#86efac'; msgEl.textContent = '✅ Guardado';
         const row = document.querySelector(`.card-row[data-uid="${uid}"]`);
         if (row) {
           row.querySelector('.card-name').textContent = data.name || name;
@@ -389,15 +401,13 @@
           msgEl.textContent = '';
         }, 1400);
       } else {
-        msgEl.style.color = '#fca5a5';
-        msgEl.textContent = '❌ ' + (data.error || 'Error desconocido');
+        msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ ' + (data.error || 'Error');
       }
     } catch { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Error de conexión'; }
   }
 
-  // ---- Eliminar tarjeta ----
+  // ---- Eliminar ----
   document.querySelectorAll('.btn-del').forEach(b => b.addEventListener('click', deleteCard));
-
   async function deleteCard(e) {
     const uid = e.currentTarget.dataset.uid;
     if (!confirm('¿Eliminar la tarjeta ' + uid + '?')) return;
@@ -410,6 +420,42 @@
         cardList.innerHTML = '<p class="empty">No hay tarjetas registradas todavía.</p>';
     } else { alert('Error: ' + (data.error || 'desconocido')); }
   }
+
+  // ---- Carga masiva ----
+  const bulkBtn     = document.getElementById('bulk-btn');
+  const bulkCsv     = document.getElementById('bulk-csv');
+  const bulkResults = document.getElementById('bulk-results');
+  const bulkList    = document.getElementById('bulk-list');
+
+  bulkBtn.addEventListener('click', async () => {
+    const csv_data = bulkCsv.value.trim();
+    if (!csv_data) { alert('Pegá el CSV primero.'); return; }
+    bulkBtn.disabled = true;
+    bulkBtn.textContent = '⏳ Procesando…';
+    bulkResults.style.display = 'none';
+    try {
+      const r    = await fetch('/admin/bulk', {
+        method: 'POST',
+        body: new URLSearchParams({ csv_data }),
+      });
+      const data = await r.json();
+      bulkList.innerHTML = data.results.map(row => {
+        const icon  = row.ok ? '✅' : '❌';
+        const info  = row.ok ? 'Token generado' : (row.error || 'Error');
+        const color = row.ok ? '#86efac' : '#fca5a5';
+        return `<div class="bulk-row" style="color:${color}">${icon} <b>${esc(row.uid||'?')}</b> &middot; ${esc(row.user||row.line||'?')} &mdash; ${esc(info)}</div>`;
+      }).join('');
+      const ok    = data.registered || 0;
+      const total = data.total || 0;
+      const col   = ok === total ? '#86efac' : '#fbbf24';
+      bulkList.insertAdjacentHTML('beforeend',
+        `<div class="bulk-summary" style="color:${col}">${ok} / ${total} tarjetas registradas con token.</div>`);
+      bulkResults.style.display = 'block';
+      if (ok > 0) setTimeout(() => location.reload(), 2000);
+    } catch (e) { alert('Error de conexión: ' + e); }
+    bulkBtn.disabled = false;
+    bulkBtn.textContent = '⚡ Procesar lote';
+  });
 
   function updateCount() {
     countEl.textContent = '(' + document.querySelectorAll('.card-row').length + ')';

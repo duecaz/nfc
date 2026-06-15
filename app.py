@@ -17,7 +17,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-14.6"
+VERSION              = "2026-06-14.7"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -69,6 +69,28 @@ def save_users(users):
 def get_requesttoken(html):
     m = REQUESTTOKEN_RE.search(html) or HEAD_TOKEN_RE.search(html)
     return m.group(1) if m else None
+
+
+def _get_app_token(username, nc_password):
+    """Llama al OCS de NC para generar un app token. Devuelve (token, error)."""
+    try:
+        r = requests.get(
+            f"{NEXTCLOUD_URL}/ocs/v2.php/core/getapppassword",
+            auth=(username, nc_password),
+            headers={"OCS-APIRequest": "true"},
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        return None, f"Error de red: {exc}"
+    try:
+        root       = ET.fromstring(r.text)
+        statuscode = root.findtext(".//statuscode") or ""
+        app_pw_el  = root.find(".//apppassword")
+    except ET.ParseError:
+        return None, "Respuesta inesperada de Nextcloud"
+    if statuscode != "200" or app_pw_el is None:
+        return None, root.findtext(".//message") or "Credenciales incorrectas"
+    return app_pw_el.text, None
 
 
 def _cleanup_page(title, subtitle):
@@ -321,41 +343,22 @@ def admin_panel():
 @app.route("/admin/register", methods=["POST"])
 @require_admin
 def admin_register():
-    uid          = (request.form.get("uid")          or "").strip()
-    username     = (request.form.get("username")     or "").strip()
-    nc_password  = (request.form.get("nc_password")  or "").strip()
-    display_name = (request.form.get("display_name") or username).strip()
+    uid         = (request.form.get("uid")         or "").strip()
+    username    = (request.form.get("username")    or "").strip()
+    nc_password = (request.form.get("nc_password") or "").strip()
 
     if not uid or not username or not nc_password:
         return jsonify(ok=False, error="Faltan campos"), 400
 
-    try:
-        r = requests.get(
-            f"{NEXTCLOUD_URL}/ocs/v2.php/core/getapppassword",
-            auth=(username, nc_password),
-            headers={"OCS-APIRequest": "true"},
-            timeout=10,
-        )
-    except requests.RequestException as exc:
-        return jsonify(ok=False, error=f"Error contactando Nextcloud: {exc}"), 502
-
-    try:
-        root       = ET.fromstring(r.text)
-        statuscode = root.findtext(".//statuscode") or ""
-        app_pw_el  = root.find(".//apppassword")
-    except ET.ParseError:
-        return jsonify(ok=False, error="Respuesta inesperada de Nextcloud"), 502
-
-    if statuscode != "200" or app_pw_el is None:
-        msg = root.findtext(".//message") or "Credenciales incorrectas"
-        return jsonify(ok=False, error=msg), 401
+    token, err = _get_app_token(username, nc_password)
+    if err:
+        return jsonify(ok=False, error=err), 401
 
     users = load_users()
-    users[uid] = {"user": username, "name": display_name, "token": app_pw_el.text}
+    users[uid] = {"user": username, "name": username, "token": token}
     save_users(users)
-
     print(f"[ADMIN] Registrada: uid={uid} user={username}", flush=True)
-    return jsonify(ok=True, uid=uid, user=username, name=display_name)
+    return jsonify(ok=True, uid=uid, user=username, name=username)
 
 
 @app.route("/admin/update", methods=["POST"])
@@ -376,34 +379,61 @@ def admin_update():
         record["name"] = display_name
 
     if nc_password:
-        try:
-            r = requests.get(
-                f"{NEXTCLOUD_URL}/ocs/v2.php/core/getapppassword",
-                auth=(username, nc_password),
-                headers={"OCS-APIRequest": "true"},
-                timeout=10,
-            )
-        except requests.RequestException as exc:
-            return jsonify(ok=False, error=f"Error contactando Nextcloud: {exc}"), 502
-
-        try:
-            root       = ET.fromstring(r.text)
-            statuscode = root.findtext(".//statuscode") or ""
-            app_pw_el  = root.find(".//apppassword")
-        except ET.ParseError:
-            return jsonify(ok=False, error="Respuesta inesperada de Nextcloud"), 502
-
-        if statuscode != "200" or app_pw_el is None:
-            msg = root.findtext(".//message") or "Credenciales incorrectas"
-            return jsonify(ok=False, error=msg), 401
-
-        record["token"] = app_pw_el.text
+        token, err = _get_app_token(username, nc_password)
+        if err:
+            return jsonify(ok=False, error=err), 401
+        record["token"] = token
         record.pop("password", None)
 
     save_users(users)
     print(f"[ADMIN] Actualizada: uid={uid} user={username}", flush=True)
     return jsonify(ok=True, uid=uid, name=record.get("name", username),
                    has_token=bool(record.get("token")))
+
+
+@app.route("/admin/bulk", methods=["POST"])
+@require_admin
+def admin_bulk():
+    """
+    Carga masiva desde CSV. Formato por linea: uid,usuario,contrasena[,nombre]
+    Lineas que empiezan con # o la cabecera 'uid' se ignoran.
+    """
+    csv_data = (request.form.get("csv_data") or "").strip()
+    if not csv_data:
+        return jsonify(ok=False, error="CSV vacio"), 400
+
+    users   = load_users()
+    results = []
+
+    for raw in csv_data.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.lower().startswith("uid"):
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 3:
+            results.append({"line": line, "ok": False, "error": "Formato inválido (necesita uid,usuario,contraseña)"})
+            continue
+
+        uid         = parts[0]
+        username    = parts[1]
+        nc_password = parts[2]
+        display_name = parts[3] if len(parts) > 3 else username
+
+        if not uid or not username or not nc_password:
+            results.append({"uid": uid, "user": username, "ok": False, "error": "Campo vacío"})
+            continue
+
+        token, err = _get_app_token(username, nc_password)
+        if err:
+            results.append({"uid": uid, "user": username, "ok": False, "error": err})
+        else:
+            users[uid] = {"user": username, "name": display_name, "token": token}
+            results.append({"uid": uid, "user": username, "name": display_name, "ok": True})
+            print(f"[BULK] uid={uid} user={username}", flush=True)
+
+    save_users(users)
+    ok_count = sum(1 for r in results if r["ok"])
+    return jsonify(ok=True, total=len(results), registered=ok_count, results=results)
 
 
 @app.route("/admin/delete", methods=["POST"])
