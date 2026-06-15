@@ -1,4 +1,4 @@
-"""
+""" 
 Kiosko NFC -> Nextcloud (lanube.uno)
 """
 import json
@@ -17,7 +17,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-14.8"
+VERSION              = "2026-06-15.1"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -484,7 +484,6 @@ def admin_create_nc_users():
             )
             root       = ET.fromstring(r.text)
             statuscode = root.findtext(".//statuscode") or ""
-            # 100 = creado, 102 = usuario ya existe
             if statuscode in ("100", "200"):
                 results.append({"user": username, "ok": True})
                 print(f"[NC-CREATE] user={username}", flush=True)
@@ -500,6 +499,50 @@ def admin_create_nc_users():
 
     ok_count = sum(1 for r in results if r["ok"])
     return jsonify(ok=True, total=len(results), created=ok_count, results=results)
+
+
+@app.route("/admin/nc-users")
+@require_admin
+def admin_nc_users():
+    """Lista todos los usuarios de Nextcloud con estado de tarjeta NFC."""
+    nc_admin_user = request.args.get("nc_admin_user", "").strip()
+    nc_admin_pass = request.args.get("nc_admin_pass", "").strip()
+    if not nc_admin_user or not nc_admin_pass:
+        return jsonify(ok=False, error="Faltan credenciales de admin NC"), 400
+    try:
+        r = requests.get(
+            f"{NEXTCLOUD_URL}/ocs/v1.php/cloud/users",
+            auth=(nc_admin_user, nc_admin_pass),
+            headers={"OCS-APIRequest": "true"},
+            timeout=15,
+        )
+        root       = ET.fromstring(r.text)
+        statuscode = root.findtext(".//statuscode") or ""
+        if statuscode not in ("100", "200"):
+            return jsonify(ok=False,
+                           error=root.findtext(".//message") or "Acceso denegado"), 401
+        nc_users = [el.text for el in root.findall(".//users/element") if el.text]
+    except requests.RequestException as exc:
+        return jsonify(ok=False, error=f"Error de red: {exc}"), 502
+    except ET.ParseError:
+        return jsonify(ok=False, error="Respuesta inesperada de Nextcloud"), 502
+
+    local_users = load_users()
+    by_username = {}
+    for uid, info in local_users.items():
+        u = info.get("user", "")
+        if u:
+            by_username[u] = {
+                "uid": uid,
+                "has_token": bool(info.get("token")),
+                "name": info.get("name", u),
+            }
+
+    result = [
+        {"username": u, "card": by_username.get(u)}
+        for u in sorted(nc_users, key=str.lower)
+    ]
+    return jsonify(ok=True, users=result, total=len(result))
 
 
 @app.route("/admin/delete", methods=["POST"])
