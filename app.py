@@ -1,6 +1,4 @@
-"""
-Kiosko NFC -> Nextcloud (lanube.uno)
-"""
+"""\nKiosko NFC -> Nextcloud (lanube.uno)\n"""
 import json
 import os
 import re
@@ -17,7 +15,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-15.3"
+VERSION              = "2026-06-15.4"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -276,10 +274,22 @@ def auth_form():
                                 user=username))
 
     print(f"[AUTH-FORM] user={username}", flush=True)
-    s, err = _nc_login(username, password)
+
+    # Verificar credenciales via OCS API (no activa brute-force) y obtener app-token
+    app_token, err = _get_app_token(username, password)
     if err:
-        print(f"[AUTH-FORM] RECHAZADO user={username}: {err}", flush=True)
-        return redirect(url_for("login_manual", error=err, user=username))
+        print(f"[AUTH-FORM] OCS RECHAZADO user={username}: {err}", flush=True)
+        return redirect(url_for("login_manual",
+                                error="Usuario o contraseña incorrectos",
+                                user=username))
+
+    # Login web con el app-token fresco (sin historial de bloqueo)
+    s, err = _nc_login(username, app_token)
+    if err:
+        print(f"[AUTH-FORM] WEB ERROR user={username}: {err}", flush=True)
+        return redirect(url_for("login_manual",
+                                error="Error al iniciar sesión. Intentá de nuevo.",
+                                user=username))
 
     print(f"[AUTH-FORM] OK user={username}", flush=True)
     out = make_response(redirect(f"{NEXTCLOUD_PUBLIC_URL}/apps/files"))
