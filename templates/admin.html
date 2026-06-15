@@ -67,6 +67,12 @@
     }
     #uid-display.ready { color: #3ddc97; }
     #uid-capture { position: absolute; left: -9999px; top: 0; opacity: 0; }
+    .nc-uid-capture { position: absolute; left: -9999px; top: 0; opacity: 0; }
+    .nc-uid-display {
+      font-family: monospace; font-size: 1.1rem; letter-spacing: .05em;
+      color: #64748b; margin-bottom: .75rem; min-height: 1.5rem;
+    }
+    .nc-uid-display.ready { color: #3ddc97; }
 
     .btn {
       display: inline-block; width: 100%; padding: .85rem 1rem;
@@ -121,6 +127,7 @@
              white-space: nowrap; font-weight: 600; }
     .badge.token    { background: #052e16; color: #86efac; }
     .badge.password { background: #422006; color: #fdba74; }
+    .badge.no-card  { background: #1e293b; color: #94a3b8; }
     .empty { color: #475569; font-size: .95rem; text-align: center; padding: 1.5rem 0; }
 
     .edit-panel {
@@ -134,7 +141,7 @@
     .edit-panel small { color: #475569; font-weight: 400; }
     .edit-actions { display: flex; gap: .6rem; margin-top: .85rem; }
     .edit-actions .btn { flex: 1; padding: .65rem .8rem; font-size: .9rem; margin-top: 0; }
-    .btn-save-ep   { background: #3ddc97; color: #071526; }
+    .btn-save-ep   { background: #3ddc97; color: #071826; }
     .btn-cancel-ep { background: #1e3a5f; color: #94a3b8; }
     .ep-msg { margin-top: .6rem; font-size: .85rem; min-height: 1.2rem; }
 
@@ -143,6 +150,13 @@
                 font-size: .85rem; font-family: monospace; }
     .bulk-row:last-child { border-bottom: none; }
     .bulk-summary { margin-top: .75rem; font-size: .9rem; font-weight: 600; }
+
+    /* NC users list summary */
+    .nc-summary {
+      font-size: .85rem; color: #94a3b8; margin-bottom: .75rem;
+      display: flex; gap: 1.5rem;
+    }
+    .nc-summary span { display: inline-flex; align-items: center; gap: .3rem; }
 
     footer { margin-top: 2.5rem; text-align: center; color: #334155; font-size: .75rem; }
   </style>
@@ -176,7 +190,7 @@
       <button class="btn btn-save" id="reg-btn" disabled>Guardar y generar token</button>
     </div>
 
-    <!-- Lista -->
+    <!-- Lista tarjetas NFC -->
     <div class="card">
       <h2>Tarjetas registradas
         <span style="color:#38bdf8;font-size:.95rem" id="count">({{ users|length }})</span>
@@ -218,12 +232,12 @@
 
   </div>
 
-  <!-- ====== PASO 1: CREAR CUENTAS EN NEXTCLOUD ====== -->
+  <!-- ====== CREDENCIALES ADMIN NEXTCLOUD (compartidas) ====== -->
   <div class="card" style="margin-top:1.5rem">
-    <h2>&#x1F465; Paso 1 &mdash; Crear cuentas en Nextcloud</h2>
+    <h2>&#x1F511; Admin Nextcloud</h2>
     <p class="card-hint">
-      Crea las cuentas de los docentes en Nextcloud. Solo se ejecuta una vez al inicio del año.<br>
-      Formato CSV: <code style="color:#7dd3fc">usuario,contraseña[,nombre completo][,email]</code>
+      Estas credenciales se usan para cargar la lista de docentes y para crear cuentas en lote.<br>
+      Se ingresan una vez y se reutilizan en todas las operaciones de abajo.
     </p>
     <div class="two-col">
       <div>
@@ -231,11 +245,35 @@
         <input id="nc-admin-user" type="text" placeholder="admin" autocomplete="off" autocapitalize="none">
       </div>
       <div>
-        <label>Contraseña admin de Nextcloud</label>
+        <label>Contrase&ntilde;a admin de Nextcloud</label>
         <input id="nc-admin-pass" type="password" autocomplete="current-password">
       </div>
     </div>
-    <label style="margin-top:1rem">Lista de docentes (CSV)</label>
+  </div>
+
+  <!-- ====== DOCENTES EN NEXTCLOUD ====== -->
+  <div class="card" style="margin-top:1rem">
+    <h2>&#x1F465; Docentes en Nextcloud</h2>
+    <p class="card-hint">
+      Lista todos los docentes registrados en Nextcloud con el estado de su tarjeta NFC.<br>
+      Hac&eacute; clic en <b>Asignar / Cambiar tarjeta</b> para vincular o reemplazar una tarjeta.
+    </p>
+    <button class="btn btn-nc" id="load-users-btn" style="margin-top:0">&#x1F504; Cargar lista de docentes</button>
+    <div class="msg err" id="nc-users-error" style="margin-top:.75rem;display:none"></div>
+    <div id="nc-users-container" style="display:none; margin-top:1.25rem">
+      <div class="nc-summary" id="nc-users-summary"></div>
+      <div class="card-list" id="nc-users-list"></div>
+    </div>
+  </div>
+
+  <!-- ====== PASO 1: CREAR CUENTAS EN NEXTCLOUD ====== -->
+  <div class="card" style="margin-top:1rem">
+    <h2>&#x1F4CB; Paso 1 &mdash; Crear cuentas en Nextcloud</h2>
+    <p class="card-hint">
+      Crea las cuentas de los docentes en Nextcloud (usa las credenciales de admin ingresadas arriba).<br>
+      Formato CSV: <code style="color:#7dd3fc">usuario,contrase&ntilde;a[,nombre completo][,email]</code>
+    </p>
+    <label style="margin-top:0">Lista de docentes (CSV)</label>
     <textarea id="nc-csv" rows="7"
       placeholder="# usuario,contraseña,nombre completo,email (opcional)&#10;jperez,Profe2026!,Juan Pérez,jperez@colegio.edu&#10;mgarcia,Profe2026!,María García"></textarea>
     <button class="btn btn-nc" id="nc-btn">&#x1F465; Crear cuentas en Nextcloud</button>
@@ -246,11 +284,11 @@
   </div>
 
   <!-- ====== PASO 2: REGISTRAR TARJETAS NFC EN LOTE ====== -->
-  <div class="card" style="margin-top:1.5rem">
+  <div class="card" style="margin-top:1rem">
     <h2>&#x26A1; Paso 2 &mdash; Registrar tarjetas NFC en lote</h2>
     <p class="card-hint">
-      Una vez creadas las cuentas y con los UID de las tarjetas escaneadas, genera todos los tokens de una vez.<br>
-      Formato CSV: <code style="color:#7dd3fc">uid,usuario,contraseña[,nombre]</code>
+      Una vez creadas las cuentas y con los UID de las tarjetas, genera todos los tokens de una vez.<br>
+      Formato CSV: <code style="color:#7dd3fc">uid,usuario,contrase&ntilde;a[,nombre]</code>
     </p>
     <textarea id="bulk-csv" rows="7"
       placeholder="# uid,usuario,contraseña,nombre (opcional)&#10;53A3A343300001,jperez,Profe2026!&#10;1234567890AB,mgarcia,Profe2026!,María García"></textarea>
@@ -265,6 +303,11 @@
 
   <script>
   "use strict";
+
+  // ---- Utilidad ----
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
 
   // ---- Tarjeta individual ----
   const scanBtn    = document.getElementById('scan-btn');
@@ -324,7 +367,7 @@
   });
 
   function appendCard(uid, data) {
-    document.querySelector('.empty')?.remove();
+    document.querySelector('#card-list .empty')?.remove();
     const entry = document.createElement('div');
     entry.className = 'card-entry'; entry.id = 'entry-' + uid;
     entry.innerHTML = `
@@ -366,7 +409,7 @@
     const uid = e.currentTarget.dataset.uid;
     const entry = document.getElementById('entry-' + uid);
     const open = entry.classList.contains('editing');
-    document.querySelectorAll('.card-entry.editing').forEach(el => el.classList.remove('editing'));
+    document.querySelectorAll('#card-list .card-entry.editing').forEach(el => el.classList.remove('editing'));
     if (!open) entry.classList.add('editing');
   }
   function cancelEdit(e) {
@@ -411,9 +454,207 @@
     if (data.ok) {
       document.getElementById('entry-' + uid)?.remove();
       updateCount();
-      if (!document.querySelector('.card-row'))
+      if (!document.querySelector('#card-list .card-row'))
         cardList.innerHTML = '<p class="empty">No hay tarjetas registradas todavía.</p>';
     } else { alert('Error: ' + (data.error||'desconocido')); }
+  }
+
+  function updateCount() {
+    countEl.textContent = '(' + document.querySelectorAll('#card-list .card-row').length + ')';
+  }
+
+  // ---- Lista de docentes NC ----
+  document.getElementById('load-users-btn').addEventListener('click', async () => {
+    const nc_admin_user = document.getElementById('nc-admin-user').value.trim();
+    const nc_admin_pass = document.getElementById('nc-admin-pass').value.trim();
+    const errEl         = document.getElementById('nc-users-error');
+    const container     = document.getElementById('nc-users-container');
+
+    errEl.style.display = 'none';
+
+    if (!nc_admin_user || !nc_admin_pass) {
+      errEl.textContent = 'Ingresá las credenciales de admin NC arriba.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('load-users-btn');
+    btn.disabled = true; btn.textContent = '⏳ Cargando…';
+    container.style.display = 'none';
+
+    try {
+      const params = new URLSearchParams({ nc_admin_user, nc_admin_pass });
+      const r      = await fetch('/admin/nc-users?' + params.toString());
+      const data   = await r.json();
+
+      if (!data.ok) {
+        errEl.textContent = '❌ ' + (data.error || 'Error al cargar');
+        errEl.style.display = 'block';
+      } else {
+        const withCard    = data.users.filter(u => u.card).length;
+        const withoutCard = data.total - withCard;
+        const sumEl = document.getElementById('nc-users-summary');
+        sumEl.innerHTML =
+          `<span>&#x1F465; ${data.total} docentes</span>` +
+          `<span style="color:#86efac">&#x2713; ${withCard} con tarjeta</span>` +
+          `<span style="color:#94a3b8">&#x25CB; ${withoutCard} sin tarjeta</span>`;
+        renderNcUsers(data.users);
+        container.style.display = 'block';
+      }
+    } catch(e) {
+      errEl.textContent = '❌ Error de conexión';
+      errEl.style.display = 'block';
+    }
+    btn.disabled = false; btn.textContent = '\u{1F504} Cargar lista de docentes';
+  });
+
+  function renderNcUsers(users) {
+    const list = document.getElementById('nc-users-list');
+    list.innerHTML = '';
+
+    if (!users.length) {
+      list.innerHTML = '<p class="empty">No hay docentes en Nextcloud.</p>';
+      return;
+    }
+
+    // Sin tarjeta primero, luego con tarjeta, ambos alfabéticos
+    users.sort((a, b) => {
+      if (!a.card && b.card) return -1;
+      if (a.card && !b.card) return  1;
+      return a.username.localeCompare(b.username);
+    });
+
+    for (const user of users) {
+      const entry = document.createElement('div');
+      entry.className = 'card-entry';
+      entry.id = 'nc-entry-' + CSS.escape(user.username);
+
+      const hasCard   = !!user.card;
+      const hasToken  = hasCard && user.card.has_token;
+      const badgeText = hasCard ? (hasToken ? 'Token ✓' : 'Contraseña') : 'Sin tarjeta';
+      const badgeCls  = hasCard ? (hasToken ? 'token' : 'password') : 'no-card';
+      const uidLine   = hasCard ? `<div class="card-uid">${esc(user.card.uid)}</div>` : '';
+      const btnText   = hasCard ? 'Cambiar tarjeta' : 'Asignar tarjeta';
+      const dispName  = hasCard ? (user.card.name || user.username) : user.username;
+
+      entry.innerHTML = `
+        <div class="card-row" data-username="${esc(user.username)}">
+          <div class="card-info">
+            <div class="card-name">${esc(dispName)}</div>
+            <div class="card-user">${esc(user.username)}</div>
+            ${uidLine}
+          </div>
+          <span class="badge ${badgeCls}">${badgeText}</span>
+          <button class="btn btn-edit nc-assign-btn" data-username="${esc(user.username)}">${btnText}</button>
+        </div>
+        <div class="edit-panel" id="nc-ep-${esc(user.username)}">
+          <label>Contrase&ntilde;a NC de <b>${esc(user.username)}</b> <small>(para generar token, no se guarda)</small></label>
+          <input type="password" class="nc-ep-pass" autocomplete="current-password">
+          <div class="uid-zone" style="margin-top:.75rem">
+            <div class="uid-label">UID de la tarjeta NFC</div>
+            <div class="nc-uid-display">— Sin escanear —</div>
+            <button class="btn btn-scan nc-scan-btn" type="button" style="margin-top:.5rem">&#x1F4C7; Escanear tarjeta</button>
+          </div>
+          <input type="text" class="nc-uid-capture" autocomplete="off">
+          <div class="edit-actions">
+            <button class="btn btn-save-ep nc-save-btn" data-username="${esc(user.username)}">Guardar</button>
+            <button class="btn btn-cancel-ep nc-cancel-btn" data-username="${esc(user.username)}">Cancelar</button>
+          </div>
+          <div class="ep-msg" id="nc-epmsg-${esc(user.username)}"></div>
+        </div>`;
+
+      // Toggle panel
+      entry.querySelector('.nc-assign-btn').addEventListener('click', () => {
+        const open = entry.classList.contains('editing');
+        document.querySelectorAll('#nc-users-list .card-entry.editing').forEach(el => el.classList.remove('editing'));
+        if (!open) entry.classList.add('editing');
+      });
+
+      // Cancel
+      entry.querySelector('.nc-cancel-btn').addEventListener('click', () => {
+        entry.classList.remove('editing');
+      });
+
+      // NFC scan
+      let ncScanning = false;
+      let ncCurrentUid = '';
+      const ncScanBtn  = entry.querySelector('.nc-scan-btn');
+      const ncCapture  = entry.querySelector('.nc-uid-capture');
+      const ncDisplay  = entry.querySelector('.nc-uid-display');
+
+      ncScanBtn.addEventListener('click', () => {
+        ncScanning = true;
+        ncScanBtn.textContent = '⏳ Acercá la tarjeta…';
+        ncScanBtn.classList.add('scanning');
+        ncCapture.value = ''; ncCapture.focus();
+      });
+      ncCapture.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || !ncScanning) return;
+        e.preventDefault();
+        const uid = ncCapture.value.trim(); ncCapture.value = '';
+        ncScanning = false; ncScanBtn.classList.remove('scanning');
+        if (uid.length < 4) { ncScanBtn.textContent = '\u{1F4C7} Escanear tarjeta'; return; }
+        ncCurrentUid = uid;
+        ncDisplay.textContent = uid;
+        ncDisplay.classList.add('ready');
+        ncScanBtn.textContent = '\u{1F504} Escanear otra vez';
+      });
+      ncCapture.addEventListener('blur', () => {
+        if (ncScanning) setTimeout(() => ncCapture.focus(), 0);
+      });
+
+      // Save
+      entry.querySelector('.nc-save-btn').addEventListener('click', async () => {
+        const pass  = entry.querySelector('.nc-ep-pass').value.trim();
+        const msgEl = document.getElementById('nc-epmsg-' + user.username);
+
+        if (!pass) { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Ingresá la contraseña NC del docente'; return; }
+        if (!ncCurrentUid) { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Escaneá la tarjeta primero'; return; }
+
+        msgEl.style.color = '#7dd3fc'; msgEl.textContent = 'Generando token…';
+        const saveBtn = entry.querySelector('.nc-save-btn');
+        saveBtn.disabled = true;
+
+        try {
+          const r = await fetch('/admin/register', {
+            method: 'POST',
+            body: new URLSearchParams({ uid: ncCurrentUid, username: user.username, nc_password: pass }),
+          });
+          const data = await r.json();
+
+          if (data.ok) {
+            msgEl.style.color = '#86efac'; msgEl.textContent = '✅ Tarjeta asignada';
+
+            // Actualizar fila en la lista NC
+            const row   = entry.querySelector('.card-row');
+            const badge = row.querySelector('.badge');
+            if (badge) { badge.textContent = 'Token ✓'; badge.className = 'badge token'; }
+            let uidDiv = row.querySelector('.card-uid');
+            if (!uidDiv) {
+              uidDiv = document.createElement('div');
+              uidDiv.className = 'card-uid';
+              row.querySelector('.card-info').appendChild(uidDiv);
+            }
+            uidDiv.textContent = ncCurrentUid;
+            const aBtn = row.querySelector('.nc-assign-btn');
+            if (aBtn) aBtn.textContent = 'Cambiar tarjeta';
+
+            // Agregar también a la lista de tarjetas NFC
+            appendCard(ncCurrentUid, { user: user.username, name: data.name || user.username });
+
+            setTimeout(() => { entry.classList.remove('editing'); msgEl.textContent = ''; }, 1500);
+          } else {
+            msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ ' + (data.error || 'Error');
+            saveBtn.disabled = false;
+          }
+        } catch {
+          msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Error de conexión';
+          saveBtn.disabled = false;
+        }
+      });
+
+      list.appendChild(entry);
+    }
   }
 
   // ---- Crear cuentas NC ----
@@ -421,7 +662,7 @@
     const nc_admin_user = document.getElementById('nc-admin-user').value.trim();
     const nc_admin_pass = document.getElementById('nc-admin-pass').value.trim();
     const nc_csv        = document.getElementById('nc-csv').value.trim();
-    if (!nc_admin_user || !nc_admin_pass) { alert('Ingresá las credenciales de admin NC.'); return; }
+    if (!nc_admin_user || !nc_admin_pass) { alert('Ingresá las credenciales de admin NC arriba.'); return; }
     if (!nc_csv) { alert('Pegá el CSV primero.'); return; }
     const btn = document.getElementById('nc-btn');
     btn.disabled = true; btn.textContent = '⏳ Creando cuentas…';
@@ -476,13 +717,6 @@
     } catch (e) { alert('Error: ' + e); }
     btn.disabled = false; btn.textContent = '⚡ Registrar tarjetas y generar tokens';
   });
-
-  function updateCount() {
-    countEl.textContent = '(' + document.querySelectorAll('.card-row').length + ')';
-  }
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
   </script>
 </body>
 </html>
