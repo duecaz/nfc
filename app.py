@@ -17,7 +17,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-14.7"
+VERSION              = "2026-06-14.8"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -72,7 +72,7 @@ def get_requesttoken(html):
 
 
 def _get_app_token(username, nc_password):
-    """Llama al OCS de NC para generar un app token. Devuelve (token, error)."""
+    """Genera un app-token en Nextcloud para el usuario. Devuelve (token, error)."""
     try:
         r = requests.get(
             f"{NEXTCLOUD_URL}/ocs/v2.php/core/getapppassword",
@@ -394,10 +394,7 @@ def admin_update():
 @app.route("/admin/bulk", methods=["POST"])
 @require_admin
 def admin_bulk():
-    """
-    Carga masiva desde CSV. Formato por linea: uid,usuario,contrasena[,nombre]
-    Lineas que empiezan con # o la cabecera 'uid' se ignoran.
-    """
+    """Carga masiva de tarjetas NFC desde CSV: uid,usuario,contrasena[,nombre]"""
     csv_data = (request.form.get("csv_data") or "").strip()
     if not csv_data:
         return jsonify(ok=False, error="CSV vacio"), 400
@@ -411,12 +408,13 @@ def admin_bulk():
             continue
         parts = [p.strip() for p in line.split(",")]
         if len(parts) < 3:
-            results.append({"line": line, "ok": False, "error": "Formato inválido (necesita uid,usuario,contraseña)"})
+            results.append({"line": line, "ok": False,
+                            "error": "Formato inválido (necesita uid,usuario,contraseña)"})
             continue
 
-        uid         = parts[0]
-        username    = parts[1]
-        nc_password = parts[2]
+        uid          = parts[0]
+        username     = parts[1]
+        nc_password  = parts[2]
         display_name = parts[3] if len(parts) > 3 else username
 
         if not uid or not username or not nc_password:
@@ -434,6 +432,74 @@ def admin_bulk():
     save_users(users)
     ok_count = sum(1 for r in results if r["ok"])
     return jsonify(ok=True, total=len(results), registered=ok_count, results=results)
+
+
+@app.route("/admin/create-nc-users", methods=["POST"])
+@require_admin
+def admin_create_nc_users():
+    """
+    Crea cuentas en Nextcloud en lote.
+    Requiere credenciales de admin de NC.
+    CSV: usuario,contrasena[,nombre_completo][,email]
+    """
+    nc_admin_user = (request.form.get("nc_admin_user") or "").strip()
+    nc_admin_pass = (request.form.get("nc_admin_pass") or "").strip()
+    csv_data      = (request.form.get("nc_csv")        or "").strip()
+
+    if not nc_admin_user or not nc_admin_pass or not csv_data:
+        return jsonify(ok=False, error="Faltan campos"), 400
+
+    results = []
+
+    for raw in csv_data.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.lower().startswith("usuario"):
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 2:
+            results.append({"line": line, "ok": False, "error": "Formato inválido"})
+            continue
+
+        username     = parts[0]
+        nc_password  = parts[1]
+        display_name = parts[2] if len(parts) > 2 else username
+        email        = parts[3] if len(parts) > 3 else ""
+
+        if not username or not nc_password:
+            results.append({"user": username, "ok": False, "error": "Campo vacío"})
+            continue
+
+        data = {"userid": username, "password": nc_password,
+                "displayName": display_name}
+        if email:
+            data["email"] = email
+
+        try:
+            r = requests.post(
+                f"{NEXTCLOUD_URL}/ocs/v1.php/cloud/users",
+                auth=(nc_admin_user, nc_admin_pass),
+                headers={"OCS-APIRequest": "true"},
+                data=data,
+                timeout=15,
+            )
+            root       = ET.fromstring(r.text)
+            statuscode = root.findtext(".//statuscode") or ""
+            # 100 = creado, 102 = usuario ya existe
+            if statuscode in ("100", "200"):
+                results.append({"user": username, "ok": True})
+                print(f"[NC-CREATE] user={username}", flush=True)
+            elif statuscode == "102":
+                results.append({"user": username, "ok": False, "error": "Usuario ya existe"})
+            else:
+                msg = root.findtext(".//message") or f"Error {statuscode}"
+                results.append({"user": username, "ok": False, "error": msg})
+        except requests.RequestException as exc:
+            results.append({"user": username, "ok": False, "error": f"Red: {exc}"})
+        except ET.ParseError:
+            results.append({"user": username, "ok": False, "error": "Respuesta inesperada"})
+
+    ok_count = sum(1 for r in results if r["ok"])
+    return jsonify(ok=True, total=len(results), created=ok_count, results=results)
 
 
 @app.route("/admin/delete", methods=["POST"])
