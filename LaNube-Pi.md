@@ -54,10 +54,29 @@ RPi 5 · 8GB RAM · 4 cores ARM · SD 29GB · Disco externo Seagate 1TB USB3:
 
 ---
 
-## Dominios (Cloudflare túnel "raspberry")
-- `https://lanube.uno` → **kiosko NFC** (192.168.1.50:**8200**)
+## Dominios y túnel Cloudflare
+
+### Enrutamiento actual (dos subdominios)
+- `https://lanube.uno` → **kiosko NFC Flask** (192.168.1.50:**8200**)
 - `https://app.lanube.uno` → **Nextcloud** (192.168.1.50:**8181**)
-- Cookies de sesión compartidas vía dominio padre `.lanube.uno`.
+
+### IMPORTANTE — cómo funciona el túnel
+El contenedor `cloudflared` (`~/docker/cloudflared/`) **solo autentica** el
+túnel. Las **reglas de enrutamiento** (qué hostname va a qué IP:puerto) están
+en el **panel web de Cloudflare**:
+
+```
+https://one.dash.cloudflare.com → Zero Trust → Networks → Tunnels → "raspberry"
+```
+
+**No hay `config.yml` local con reglas de ingress — todo está online.**
+Nginx Proxy Manager (`~/docker/nginx/`) está instalado pero **no está en el
+camino del tráfico**: cloudflared enruta directamente a los puertos 8200 y 8181.
+
+### Migración pendiente: dominio único
+El plan es mover NC a `lanube.uno/app/` para eliminar el problema de cookies
+cross-subdomain (ver DEUDAS). Cuando se haga, las reglas en el panel de
+Cloudflare también deberán actualizarse.
 
 ## Credenciales (TESTEO — cambiar en producción)
 - Nextcloud admin: usuario `nextcloud` · contraseña `Colegio2026!`
@@ -67,54 +86,71 @@ RPi 5 · 8GB RAM · 4 cores ARM · SD 29GB · Disco externo Seagate 1TB USB3:
 ---
 
 ## Cómo funciona el kiosko NFC (Flask, puerto 8200)
-1. El lector NFC USB "teclea" el UID + Enter en un campo oculto siempre enfocado.
-2. El kiosko busca el UID en `users.json` → usuario + token (app password).
-3. Hace login server-side contra `https://app.lanube.uno` (como un navegador real).
-4. Reenvía las cookies de sesión (dominio `.lanube.uno`) al navegador.
-5. Redirige al docente a `https://app.lanube.uno/apps/files` ya logueado.
 
-### Variables del contenedor kiosko (producción)
-```
-NEXTCLOUD_URL=https://app.lanube.uno
-NEXTCLOUD_PUBLIC_URL=https://app.lanube.uno
-COOKIE_DOMAIN=.lanube.uno
+### Flujo actual (v2026-06-17.1+) — Basic Auth
+1. El lector NFC USB "teclea" el UID + Enter en un campo oculto siempre enfocado.
+2. JS del kiosko hace POST a `/auth` con el UID.
+3. Flask busca el UID en `users.json` → obtiene `{user, app_token}`.
+4. Flask hace `GET http://192.168.1.50:8181/apps/files` con
+   `Authorization: Basic base64(user:app_token)`.
+   NC devuelve HTTP 200 + cookies de sesión.
+5. Flask copia esas cookies al response del navegador.
+6. Flask responde `{ok:true, redirect:"https://app.lanube.uno/apps/files"}`.
+7. JS del kiosko redirige al navegador a `app.lanube.uno/apps/files`.
+
+> **Por qué Basic Auth y no formulario web:**
+> NC 33 hace validación estricta de `Origin` contra `overwrite.cli.url`.
+> El POST de formulario desde Flask **siempre falla con CSRF rejection** — no
+> tiene solución sin modificar NC. El endpoint `/apps/files` con Basic Auth
+> sí funciona y genera sesión completa (confirmado con curl: HTTP 200 + Set-Cookie).
+
+> **Limitación pendiente:** Flask está en `lanube.uno` pero las cookies de sesión
+> de NC se setean en `lanube.uno`. Al redirigir a `app.lanube.uno` el navegador
+> no envía esas cookies. Las `__Host-` cookies de NC no admiten `Domain=`, así
+> que no se pueden compartir aunque se use `COOKIE_DOMAIN=.lanube.uno`.
+> **Solución definitiva: migración a dominio único** (ver DEUDAS).
+
+### Variables del contenedor kiosko (docker-compose en Pi)
+```yaml
+NEXTCLOUD_URL=http://192.168.1.50:8181        # URL interna — para llamadas server-side
+NEXTCLOUD_PUBLIC_URL=https://app.lanube.uno   # URL pública — para redirects al browser
+COOKIE_DOMAIN=.lanube.uno                     # intento de compartir cookies (insuficiente)
+ADMIN_PASSWORD=Colegio2026!
 ```
 
 ### Formato de users.json (tokens — formato actual)
 ```json
 {
-  "UID_DE_TARJETA": { "user": "jperez", "token": "xxxx-yyyy-zzzz-aaaa" }
+  "UID_DE_TARJETA": { "user": "jperez", "name": "jperez", "token": "xxxx..." }
 }
 ```
 > El campo `token` es un **app password de Nextcloud** (revocable desde
 > Configuración → Seguridad). Si el docente cambia su contraseña real,
 > el token sigue funcionando. Si se pierde o filtra, se revoca sin afectar
-> a los demás. El campo `password` (clave real) sigue soportado como
-> fallback pero NO debe usarse en producción.
+> a los demás.
 
 ### Generar un app password para un docente
 ```bash
-# Desde la Pi — autenticar con la clave real para obtener un token revocable
 docker exec nextcloud_server curl -s \
   -u "jperez:CLAVE_REAL" \
   -H "OCS-APIRequest: true" \
   "http://localhost/ocs/v2.php/core/getapppassword"
-
-# La respuesta XML contiene <apppassword>TOKEN</apppassword>
-# Copiar ese valor y ponerlo en users.json como "token": "TOKEN"
+# Respuesta: <apppassword>TOKEN</apppassword>
+# O usar el panel admin del kiosko: lanube.uno/admin
 ```
 
 ### Hallazgos clave (que costó descubrir)
-- El login programático contra Nextcloud **exige el header `Origin`**; sin él
-  redirige a `/login?direct=1` sin validar la contraseña (CSRF).
-- Hablar con Nextcloud por su **URL pública** (no por la IP interna) evita los
-  conflictos de proxy/HTTPS.
-- La cookie de sesión `oc...` NO lleva prefijo `__Host-` (sí se comparte entre
-  subdominios); las `__Host-nc_sameSiteCookie*` se saltan (Nextcloud las regenera).
+- **NC 33 rechaza el formulario web desde proxy externo.** La CSRF validation
+  compara el `Origin` con `overwrite.cli.url`. Aunque se envíe el `Origin`
+  correcto, NC 33 añade validaciones adicionales de cookie que fallan desde Flask.
+  Solución: usar Basic Auth en `/apps/files`, no el formulario.
+- **Basic Auth en `/apps/files` genera sesión completa.** NC devuelve 200 +
+  `Set-Cookie` con las cookies de sesión. Confirmado con curl.
+- **Las `__Host-` cookies no admiten Domain.** NC setea
+  `__Host-nc_sameSiteCookielax` y `__Host-nc_sameSiteCookiestrict` sin dominio.
+  Flask las omite al copiar cookies al browser.
 - Diagnóstico de oro: si `curl -u user:token .../remote.php/dav/files/user/` da
-  **200**, la credencial es correcta → el problema es CSRF/Origin/cookies, no la clave.
-- Los **app passwords** funcionan igual que contraseñas reales en el formulario
-  de login de Nextcloud (campo `password` del POST a `/login`).
+  **200**, la credencial es correcta.
 
 ---
 
@@ -136,13 +172,20 @@ skeletondirectory = /var/www/html/data/skeleton   (carpeta limpia para usuarios 
 # Estado de contenedores
 cd ~ && docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-# Reiniciar / reconstruir el kiosko
-cd ~/docker/kiosk && docker compose up -d --build --force-recreate
-cd ~/docker/kiosk && docker compose logs --tail=15 kiosk
+# Deploy del kiosko (tras actualizar el repo en GitHub)
+cd ~/docker/kiosk
+git fetch origin claude/clever-fermat-6852kl
+git pull origin claude/clever-fermat-6852kl
+docker compose down && docker compose build --no-cache && docker compose up -d
+sleep 5 && curl -s http://localhost:8200/health | python3 -m json.tool
+
+# Ver logs en vivo del kiosko
+cd ~/docker/kiosk && docker compose logs --tail=30 -f kiosk
 
 # occ (admin Nextcloud) — usa el alias
 occ user:list
 occ config:system:get <clave>
+occ config:system:set <clave> --value='<valor>'
 
 # Crear docente + cuota
 docker exec -e OC_PASS='ClaveProfe!' -u www-data nextcloud_server php occ \
@@ -153,15 +196,20 @@ occ user:setting usuario files quota "5 GB"
 docker exec nextcloud_server curl -s -o /dev/null -w "%{http_code}\n" \
   -u "USER:TOKEN_O_PASS" http://localhost/remote.php/dav/files/USER/
 
+# Verificar que Basic Auth a /apps/files funciona (debe dar 200 + Set-Cookie)
+docker exec nextcloud_server curl -si -L \
+  -u "USER:TOKEN" -H "Accept: text/html" \
+  http://localhost/apps/files | head -25
+
 # Generar app password (token revocable) para un docente
 docker exec nextcloud_server curl -s \
   -u "USER:CLAVE_REAL" \
   -H "OCS-APIRequest: true" \
   http://localhost/ocs/v2.php/core/getapppassword
-# Respuesta: <apppassword>TOKEN</apppassword> -> copiar en users.json
+# Respuesta: <apppassword>TOKEN</apppassword> → copiar en users.json
 
-# Health check del kiosko (muestra cuántos usuarios tienen token vs password)
-curl http://localhost:8200/health
+# Health check del kiosko
+curl -s http://localhost:8200/health | python3 -m json.tool
 ```
 
 ---
@@ -174,66 +222,65 @@ Una pantalla entra a `lanube.uno` y redirige sola a `lanube.uno/index.php/login`
 
 ### Causa raíz
 Cuando `lanube.uno` servía Nextcloud, el browser instaló el **service worker
-(SW) de Nextcloud** en el scope `/` del dominio. Ahora que `lanube.uno` sirve
-el kiosko Flask, ese SW viejo sigue registrado y **intercepta TODAS las
-requests**, sirviendo contenido cacheado de Nextcloud.
+(SW) de Nextcloud** en el scope `/`. Ese SW sigue interceptando TODAS las
+requests aunque ahora `lanube.uno` sirva el kiosko Flask.
 
-### Por qué `Clear-Site-Data` no alcanza
-El header `Clear-Site-Data: "cache", "cookies", "storage"` borra la caché
-HTTP y el localStorage, **pero NO desregistra service workers** — esa opción
-no existe en la spec del navegador (2024). El SW sobrevive.
-
-### Solución implementada (en app.py)
-**Ruta `/reset`** — acceder desde la barra de URLs de la pantalla táctil:
-1. JS llama `navigator.serviceWorker.getRegistrations()` y desregistra todos.
-2. Limpia Cache API, localStorage y sessionStorage.
-3. Registra `/sw.js` como **segunda capa**: un SW "auto-destructor" que
-   toma el control inmediatamente (`skipWaiting`), borra caches y se
-   desregistra solo, **sin navegar clientes** (si navegara de vuelta a
-   `/reset` causaría un bucle infinito).
-4. Muestra un botón verde **"Abrir kiosko NFC →"** y auto-redirige a `/`
-   después de 2 s extra para que el SW termine.
-
-### Cómo aplicarlo en la pantalla atascada
+### Solución — desde la barra de URLs
 ```
 lanube.uno/reset
 ```
-Escribir esa URL en la barra de direcciones (teclado virtual de la pantalla
-táctil). En ~3 segundos la pantalla muestra el botón verde y se limpia sola.
-No requiere F12 ni DevTools.
+En ~3 segundos la pantalla se limpia sola. No requiere F12 ni DevTools.
 
-### Lección para futuros desarrollos
-> Si en algún momento se instala un service worker en `lanube.uno` o en
-> cualquier dominio del colegio, el proceso de desinstalación DEBE poder
-> ejecutarse desde la barra de URLs del navegador, sin herramientas de
-> desarrollador. Diseñar siempre una ruta `/reset` (o similar) con esta
-> lógica de dos capas (JS directo + SW destructor).
+La ruta `/reset` en `app.py` ejecuta JS que desregistra todos los SW, limpia
+Cache API / localStorage / sessionStorage, instala un SW "auto-destructor" que
+se elimina solo, y redirige a `/`.
 
 ---
 
 ## DEUDAS / PENDIENTES
-1. ~~**Service worker fantasma:** `lanube.uno` redirigía a `/index.php/login`~~
-   → **RESUELTO**: `/reset` con JS de desregistro + SW auto-destructor.
-   Ver sección "Service worker fantasma" para el diagnóstico completo.
-2. **App passwords:** ~~`users.json` guarda contraseña real; si el docente
-   cambia su clave, el NFC se rompe.~~
-   → **MIGRADO**: `app.py` ahora prefiere el campo `token` (app password
-   revocable). Pendiente: migrar los `users.json` existentes en producción
-   generando un token por docente con el comando de arriba.
-3. Reactivar protección anti-fuerza-bruta antes de producción.
-4. Servidor WSGI real para el kiosko (hoy usa el server de desarrollo de Flask).
-5. Alta masiva de las 30 tarjetas (script CSV → usuarios + tokens).
-6. Google Drive: cada docente con su Drive personal → OAuth en modo Testing
-   exige agregar cada correo (pesado para 30 cuentas personales). Decisión pendiente.
+
+1. **Migración a dominio único** — PENDIENTE (prioridad alta)
+   - Problema: Flask en `lanube.uno` no puede setear cookies válidas para
+     `app.lanube.uno`. Las `__Host-` cookies bloquean el workaround con
+     `COOKIE_DOMAIN=.lanube.uno`.
+   - Plan: `lanube.uno/app/` → NC via nginx `proxy_pass` con strip de prefix.
+   - Cambios necesarios:
+     - **Panel Cloudflare** (one.dash.cloudflare.com): el tunnel "raspberry"
+       pasa a tener una sola regla `lanube.uno → nginx local (puerto 80)`.
+     - **nginx** (`~/docker/nginx/`): `location /app/` → NC:8181 (strip `/app`).
+     - **NC config.php**: `overwrite.cli.url=https://lanube.uno/app`,
+       `overwrite.webroot=/app`.
+     - **docker-compose kiosko**: `NEXTCLOUD_PUBLIC_URL=https://lanube.uno/app`,
+       eliminar `COOKIE_DOMAIN`.
+     - **app.py**: sin cambios en lógica, solo cambia el env var.
+
+2. **Reactivar brute-force protection** antes de producción:
+   ```bash
+   occ config:system:set auth.bruteforce.protection.enabled --value=true --type=bool
+   ```
+
+3. **Alta masiva de 30 tarjetas** via CSV en el panel admin (`lanube.uno/admin`).
+
+4. **Servidor WSGI** (Gunicorn) en vez del server dev de Flask.
+
+5. **Cambiar todas las contraseñas** de testeo antes de producción.
+
+6. ~~Service worker fantasma~~ → RESUELTO con `/reset`.
+
+7. ~~App passwords~~ → MIGRADO: `app.py` usa el campo `token` (app password
+   revocable). El campo `password` (clave real) sigue soportado como fallback.
 
 ---
 
 ## Prompt para retomar en otra conversación
-> Estoy montando "La Nube": Nextcloud (app.lanube.uno) + un kiosko NFC en Flask
-> (lanube.uno) en mi Raspberry Pi 5, expuesto por Cloudflare. El docente pasa su
-> tarjeta NFC y entra a sus archivos sin teclear. Te adjunto el MD con todo el
-> inventario (puertos, rutas, comandos, config y deudas). No puedes acceder a mi
-> Pi: yo ejecuto los comandos por SSH y te pego resultados; empieza siempre con
-> `cd ~`. RESTRICCIÓN CRÍTICA: las pantallas interactivas no tienen F12 ni
-> DevTools — toda solución debe funcionar desde la barra de URLs o botones
-> visibles en pantalla.
+
+> Estoy montando "La Nube": Nextcloud en `app.lanube.uno` (puerto 8181) + un
+> kiosko NFC Flask en `lanube.uno` (puerto 8200) en mi Raspberry Pi 5.
+> Cloudflare Tunnel "raspberry" enruta el tráfico: las reglas están en el
+> **panel web de Cloudflare** (one.dash.cloudflare.com → Zero Trust → Tunnels),
+> NO en config local. El docente pasa su tarjeta NFC y entra a sus archivos.
+> Te adjunto el MD con inventario completo. No puedes acceder a mi Pi: yo
+> ejecuto los comandos por SSH y te pego resultados; empieza siempre con `cd ~`.
+> RESTRICCIÓN CRÍTICA: las pantallas no tienen F12 ni DevTools — toda solución
+> debe funcionar desde la barra de URLs o botones visibles en pantalla.
+> Repo: `duecaz/nfc`, rama activa: `claude/clever-fermat-6852kl`.
