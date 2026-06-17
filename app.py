@@ -14,10 +14,19 @@ from flask import (
     Flask, jsonify, make_response, redirect,
     render_template, request, url_for,
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-17.4"
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+)
+
+VERSION              = "2026-06-17.5"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -312,6 +321,8 @@ def login_manual():
 
 
 @app.route("/auth-form", methods=["POST"])
+@limiter.limit("10 per 5 minutes",
+               error_message="Demasiados intentos. Esperá 5 minutos.")
 def auth_form():
     username = (request.form.get("username") or "").strip()
     password = (request.form.get("password") or "").strip()
@@ -469,6 +480,8 @@ def uid_lookup():
 
 
 @app.route("/cambiar-clave", methods=["GET", "POST"])
+@limiter.limit("5 per 10 minutes", methods=["POST"],
+               error_message="Demasiados intentos. Esperá 10 minutos.")
 def cambiar_clave():
     if request.method == "GET":
         uid = request.args.get("uid", "")
@@ -503,7 +516,7 @@ def cambiar_clave():
 
     ok, err = _nc_change_password(username, old_pass, new_pass)
     if not ok:
-        return bad(f"Contraseña actual incorrecta: {err}")
+        return bad("Usuario o contraseña incorrectos.")
 
     token, err = _get_app_token(username, new_pass)
     if err:
