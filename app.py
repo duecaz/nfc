@@ -1,4 +1,6 @@
-"""\nKiosko NFC -> Nextcloud (lanube.uno)\n"""
+"""
+Kiosko NFC -> Nextcloud (lanube.uno)
+"""
 import json
 import os
 import re
@@ -15,7 +17,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-17.3"
+VERSION              = "2026-06-17.4"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -131,6 +133,28 @@ def _nc_login(username, password):
         return None, "Usuario o contraseña incorrectos"
 
     return s, None
+
+
+def _nc_change_password(username, old_password, new_password):
+    """Cambia la contraseña del usuario en NC usando sus propias credenciales."""
+    try:
+        r = requests.put(
+            f"{NEXTCLOUD_URL}/ocs/v1.php/cloud/users/{username}",
+            auth=(username, old_password),
+            headers={"OCS-APIRequest": "true"},
+            data={"key": "password", "value": new_password},
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        return False, f"Error de red: {exc}"
+    try:
+        root       = ET.fromstring(r.text)
+        statuscode = root.findtext(".//statuscode") or ""
+    except ET.ParseError:
+        return False, "Respuesta inesperada de Nextcloud"
+    if statuscode in ("100", "200"):
+        return True, None
+    return False, root.findtext(".//message") or f"Error {statuscode}"
 
 
 def _nc_session_from_token(username, app_token):
@@ -431,6 +455,73 @@ def reset():
         title="Reparando pantalla…",
         subtitle="Limpiando caché y service workers…",
     )
+
+
+@app.route("/uid-lookup")
+def uid_lookup():
+    uid = (request.args.get("uid") or "").strip()
+    if not uid:
+        return jsonify(ok=False), 400
+    record = load_users().get(uid)
+    if not record:
+        return jsonify(ok=False, error="Tarjeta no registrada"), 404
+    return jsonify(ok=True, user=record["user"], name=record.get("name", record["user"]))
+
+
+@app.route("/cambiar-clave", methods=["GET", "POST"])
+def cambiar_clave():
+    if request.method == "GET":
+        uid = request.args.get("uid", "")
+        prefill_user = ""
+        display_name = ""
+        if uid:
+            record = load_users().get(uid)
+            if record:
+                prefill_user = record["user"]
+                display_name = record.get("name", record["user"])
+        return render_template("cambiar_clave.html",
+                               prefill_user=prefill_user,
+                               display_name=display_name,
+                               error="", success=False)
+
+    username = (request.form.get("username")     or "").strip()
+    old_pass = (request.form.get("old_password") or "").strip()
+    new_pass = (request.form.get("new_password") or "").strip()
+    confirm  = (request.form.get("confirm")      or "").strip()
+
+    def bad(msg):
+        return render_template("cambiar_clave.html",
+                               prefill_user=username, display_name="",
+                               error=msg, success=False)
+
+    if not username or not old_pass or not new_pass:
+        return bad("Completá todos los campos.")
+    if new_pass != confirm:
+        return bad("Las contraseñas nuevas no coinciden.")
+    if len(new_pass) < 8:
+        return bad("La contraseña nueva debe tener al menos 8 caracteres.")
+
+    ok, err = _nc_change_password(username, old_pass, new_pass)
+    if not ok:
+        return bad(f"Contraseña actual incorrecta: {err}")
+
+    token, err = _get_app_token(username, new_pass)
+    if err:
+        print(f"[CAMBIAR-CLAVE] Contraseña OK pero error token user={username}: {err}", flush=True)
+        return bad("Contraseña cambiada, pero error al actualizar la tarjeta NFC. Avisá al admin.")
+
+    users = load_users()
+    for record in users.values():
+        if record.get("user") == username:
+            record["token"] = token
+            record.pop("password", None)
+            break
+    save_users(users)
+    print(f"[CAMBIAR-CLAVE] OK user={username}", flush=True)
+
+    return render_template("cambiar_clave.html",
+                           prefill_user="", display_name="",
+                           error="", success=True, changed_user=username)
 
 
 # ---------------------------------------------------------------------------
