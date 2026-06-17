@@ -15,7 +15,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-17.2"
+VERSION              = "2026-06-17.3"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -272,6 +272,10 @@ def auth():
         redirect=f"{NEXTCLOUD_PUBLIC_URL}/apps/files",
         user=username,
     ))
+    for name in list(request.cookies.keys()):
+        if not name.startswith("admin_"):
+            out.delete_cookie(name, path="/")
+            out.delete_cookie(name, path="/app")
     _apply_nc_cookies(out, s)
     return out
 
@@ -312,6 +316,10 @@ def auth_form():
 
     print(f"[AUTH-FORM] OK user={username}", flush=True)
     out = make_response(redirect(f"{NEXTCLOUD_PUBLIC_URL}/apps/files"))
+    for name in list(request.cookies.keys()):
+        if not name.startswith("admin_"):
+            out.delete_cookie(name, path="/")
+            out.delete_cookie(name, path="/app")
     _apply_nc_cookies(out, s)
     return out
 
