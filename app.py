@@ -15,7 +15,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-15.4"
+VERSION              = "2026-06-17.1"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -133,10 +133,31 @@ def _nc_login(username, password):
     return s, None
 
 
+def _nc_session_from_token(username, app_token):
+    """Abre sesión NC via Basic Auth con app-token. Devuelve (session, error)."""
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (kiosk)",
+        "Accept": "text/html,application/xhtml+xml,*/*",
+    })
+    try:
+        r = s.get(
+            f"{NEXTCLOUD_URL}/apps/files",
+            auth=(username, app_token),
+            allow_redirects=True,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        return None, f"No se pudo contactar Nextcloud: {exc}"
+    if r.status_code != 200 or "/login" in r.url:
+        return None, "Credenciales rechazadas por Nextcloud"
+    return s, None
+
+
 def _apply_nc_cookies(out_resp, nc_session):
     """Copia las cookies de NC al response de Flask."""
     for c in nc_session.cookies:
-        if COOKIE_DOMAIN and c.name.startswith("__Host-"):
+        if c.name.startswith("__Host-"):
             continue
         out_resp.set_cookie(c.name, c.value, path="/", httponly=True,
                             samesite="Lax", domain=COOKIE_DOMAIN,
@@ -232,17 +253,15 @@ def auth():
     if not record:
         return jsonify(ok=False, error="Tarjeta no registrada", uid=uid), 404
 
-    username    = record["user"]
-    credential  = record.get("token") or record.get("password")
-    using_token = bool(record.get("token"))
+    username  = record["user"]
+    app_token = record.get("token")
 
-    if not credential:
-        return jsonify(ok=False, error="Sin credencial configurada"), 500
+    if not app_token:
+        return jsonify(ok=False, error="Sin token configurado. Registrá la tarjeta de nuevo."), 500
 
-    cred_type = "token" if using_token else "password"
-    print(f"[AUTH] user={username} cred={cred_type}", flush=True)
+    print(f"[AUTH] user={username}", flush=True)
 
-    s, err = _nc_login(username, credential)
+    s, err = _nc_session_from_token(username, app_token)
     if err:
         print(f"[AUTH] RECHAZADO user={username}: {err}", flush=True)
         return jsonify(ok=False, error=err), 401
@@ -275,7 +294,7 @@ def auth_form():
 
     print(f"[AUTH-FORM] user={username}", flush=True)
 
-    # Verificar credenciales via OCS API (no activa brute-force) y obtener app-token
+    # Genera app-token (verifica credenciales y lo usamos para abrir sesión)
     app_token, err = _get_app_token(username, password)
     if err:
         print(f"[AUTH-FORM] OCS RECHAZADO user={username}: {err}", flush=True)
@@ -283,10 +302,10 @@ def auth_form():
                                 error="Usuario o contraseña incorrectos",
                                 user=username))
 
-    # Login web con el app-token fresco (sin historial de bloqueo)
-    s, err = _nc_login(username, app_token)
+    # Abre sesión NC via Basic Auth con el app-token
+    s, err = _nc_session_from_token(username, app_token)
     if err:
-        print(f"[AUTH-FORM] WEB ERROR user={username}: {err}", flush=True)
+        print(f"[AUTH-FORM] SESSION ERROR user={username}: {err}", flush=True)
         return redirect(url_for("login_manual",
                                 error="Error al iniciar sesión. Intentá de nuevo.",
                                 user=username))
