@@ -6,13 +6,8 @@ services:
     ports:
       - "8200:5000"
     environment:
-      # URL INTERNA para el login server-side (192.168.1.50 en trusted_domains).
       - NEXTCLOUD_URL=http://192.168.1.50:8181
-      # --- PRODUCCION (descomentar) ---
-      # - NEXTCLOUD_PUBLIC_URL=https://app.lanube.uno
-      # - COOKIE_DOMAIN=.lanube.uno
-      # Contrasena del panel /admin  (usuario siempre: admin)
-      - ADMIN_PASSWORD=cambiar-esto-antes-de-produccion
+      - NEXTCLOUD_PUBLIC_URL=https://lanube.uno/app
+      - ADMIN_PASSWORD=Colegio2026!
     volumes:
-      # users.json editable sin reconstruir (mapa UID -> usuario + token).
       - ./users.json:/app/users.json
