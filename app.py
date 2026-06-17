@@ -15,7 +15,7 @@ from flask import (
 
 app = Flask(__name__)
 
-VERSION              = "2026-06-17.1"
+VERSION              = "2026-06-17.2"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -388,6 +388,32 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
     resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
     resp.headers["Service-Worker-Allowed"] = "/"
     resp.headers["Cache-Control"] = "no-store, no-cache"
+    return resp
+
+
+@app.route("/logout")
+def nc_logout():
+    """Intercepta el logout de NC: invalida sesión server-side y vuelve al kiosko."""
+    requesttoken = request.args.get("requesttoken", "")
+    if requesttoken:
+        try:
+            nc_cookies = {k: v for k, v in request.cookies.items()
+                          if not k.startswith("admin_")}
+            requests.get(
+                f"{NEXTCLOUD_URL}/logout",
+                params={"requesttoken": requesttoken},
+                cookies=nc_cookies,
+                allow_redirects=False,
+                timeout=5,
+            )
+        except Exception:
+            pass
+
+    resp = make_response(redirect("/"))
+    for name in list(request.cookies.keys()):
+        if not name.startswith("admin_"):
+            resp.delete_cookie(name, path="/")
+    print("[LOGOUT] Sesión cerrada, volviendo al kiosko", flush=True)
     return resp
 
 
