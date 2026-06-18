@@ -26,7 +26,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "2026-06-17.5"
+VERSION              = "2026-06-18.1"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -45,6 +45,8 @@ HEAD_TOKEN_RE   = re.compile(r'data-requesttoken="([^"]+)"')
 _CLEANUP_JS = """\
 (async()=>{
   const st=document.getElementById('st');
+  const go=()=>window.location.replace('/');
+  const bail=setTimeout(go,5000);
   if('serviceWorker' in navigator){
     try{const r=await navigator.serviceWorker.getRegistrations();
       await Promise.all(r.map(x=>x.unregister()));}
@@ -54,12 +56,9 @@ _CLEANUP_JS = """\
     await Promise.all(k.map(x=>caches.delete(x)));}
     catch(e){}}
   try{localStorage.clear();sessionStorage.clear();}catch(e){}
-  if('serviceWorker' in navigator){
-    try{await navigator.serviceWorker.register('/sw.js',{scope:'/'});
-      await new Promise(r=>setTimeout(r,800));}catch(e){}
-  }
+  clearTimeout(bail);
   if(st) st.textContent='✅ Listo, abriendo kiosko...';
-  setTimeout(()=>{window.location.replace('/');},1200);
+  setTimeout(go,1000);
 })();
 """
 
