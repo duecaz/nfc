@@ -1,6 +1,4 @@
-"""
-Kiosko NFC -> Nextcloud (lanube.uno)
-"""
+"""\nKiosko NFC -> Nextcloud (lanube.uno)\n"""
 import json
 import os
 import re
@@ -26,7 +24,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "6"
+VERSION              = "7"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -292,7 +290,7 @@ def admin_login():
             )
             return resp
         error = "Contraseña incorrecta"
-    return render_template("admin_login.html", error=error)
+    return render_template("admin.html", authenticated=False, error=error)
 
 
 @app.route("/admin/logout")
@@ -303,7 +301,7 @@ def admin_logout():
 
 
 # ---------------------------------------------------------------------------
-# Rutas principales
+# Kiosko
 # ---------------------------------------------------------------------------
 
 @app.route("/")
@@ -434,6 +432,7 @@ def nextcloud_catch(subpath):
 @app.route("/sw-kiosk.js")
 def sw_kiosk_js():
     js = """\
+// Kiosko SW permanente - La Nube NFC
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
@@ -451,6 +450,7 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 @app.route("/sw.js")
 def sw_js():
     js = """\
+// Auto-destructor SW - La Nube kiosko NFC
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
@@ -469,7 +469,7 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 
 @app.route("/logout")
 def nc_logout():
-    """Intercepta el logout de NC: invalida sesión server-side y redirige al inicio."""
+    """Intercepta el logout de NC: invalida sesión server-side y vuelve al kiosko."""
     requesttoken = request.args.get("requesttoken", "")
     if requesttoken:
         try:
@@ -489,7 +489,7 @@ def nc_logout():
     for name in list(request.cookies.keys()):
         if not name.startswith("admin_"):
             resp.delete_cookie(name, path="/")
-    print("[LOGOUT] Sesión cerrada", flush=True)
+    print("[LOGOUT] Sesión cerrada, volviendo al kiosko", flush=True)
     return resp
 
 
@@ -497,7 +497,7 @@ def nc_logout():
 def reset():
     return _cleanup_page(
         title="Reparando pantalla…",
-        subtitle="Limpiando caché y datos del navegador…",
+        subtitle="Limpiando caché y service workers…",
     )
 
 
@@ -577,7 +577,7 @@ def cambiar_clave():
 @app.route("/admin")
 @require_admin
 def admin_panel():
-    return render_template("admin.html",
+    return render_template("admin.html", authenticated=True,
                            users=load_users(),
                            nextcloud_url=NEXTCLOUD_PUBLIC_URL)
 
