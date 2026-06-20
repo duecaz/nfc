@@ -179,7 +179,6 @@
 
   <div class="card">
     <div class="logo-mark">
-      <!-- Lucide "cloud" -->
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
            stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>
@@ -193,9 +192,9 @@
       <div class="success-icon">&#x2705;</div>
       <h2>Contraseña actualizada</h2>
       <p>La tarjeta NFC de <strong>{{ changed_user }}</strong> quedó sincronizada.<br>
-         Volviendo al kiosko en <span id="ct">5</span>s…</p>
+         Volviendo al inicio de sesión en <span id="ct">5</span>s…</p>
       <a href="/" class="btn-submit" style="display:inline-block;text-decoration:none;width:auto;padding:.65rem 2rem;">
-        Ir al kiosko
+        Ir al inicio de sesión
       </a>
     </div>
 
@@ -252,7 +251,7 @@
     {% endif %}
 
     <hr>
-    <a class="back-link" href="/">&larr; Volver al kiosko</a>
+    <a class="back-link" href="/">&larr; Inicio de sesión con tarjeta</a>
   </div>
   <span class="ver">v{{ version }}</span>
 

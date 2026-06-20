@@ -26,7 +26,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "5"
+VERSION              = "6"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -57,7 +57,7 @@ _CLEANUP_JS = """\
     catch(e){}}
   try{localStorage.clear();sessionStorage.clear();}catch(e){}
   clearTimeout(bail);
-  if(st) st.textContent='✅ Listo, abriendo kiosko...';
+  if(st) st.textContent='Listo, redirigiendo...';
   setTimeout(go,1000);
 })();
 """
@@ -200,22 +200,60 @@ def _cleanup_page(title, subtitle):
     html = f"""<!DOCTYPE html>
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{title}</title></head>
-<body style="background:#0a2540;color:#fff;font-family:sans-serif;
-            display:flex;flex-direction:column;align-items:center;
-            justify-content:center;min-height:100vh;padding:2rem;text-align:center">
-  <div style="font-size:5rem;margin-bottom:1.5rem">&#x1F527;</div>
-  <h1 style="font-size:2rem;margin-bottom:.75rem">{title}</h1>
-  <p id="st" style="font-size:1.2rem;opacity:.8;margin-bottom:2.5rem">{subtitle}</p>
-  <a href="/" onclick="document.getElementById('btn').style.display='none'"
-     id="btn"
-     style="display:inline-block;padding:1.2rem 3rem;background:#3ddc97;
-            color:#0a2540;border-radius:16px;text-decoration:none;
-            font-size:1.4rem;font-weight:700;margin-top:.5rem">
-    &#x1F9F9; Reparar y abrir kiosko
-  </a>
+<title>{title}</title>
+<style>
+  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: #f0f2f4; color: #0f172a;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+  }}
+  .card {{
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 2.75rem 2.5rem 2.25rem; width: 90%; max-width: 380px;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 20px rgba(0,0,0,.06);
+  }}
+  .logo-mark {{
+    width: 44px; height: 44px; background: #0f172a; border-radius: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-bottom: 1.25rem;
+  }}
+  h1 {{ font-size: 1.3rem; font-weight: 700; color: #0f172a; margin-bottom: .3rem; }}
+  .sub {{ font-size: .875rem; color: #64748b; margin-bottom: 1.75rem; }}
+  #st {{ font-size: .85rem; color: #64748b; min-height: 1.2rem; margin-bottom: 1.5rem; }}
+  .btn {{
+    display: inline-block; padding: .7rem 2rem;
+    background: #0f172a; color: #fff; border: none; border-radius: 8px;
+    font-size: .95rem; font-weight: 600; text-decoration: none;
+    transition: background .15s;
+  }}
+  .btn:hover {{ background: #1e293b; }}
+  .ver {{
+    position: fixed; bottom: .5rem; right: .75rem;
+    font-size: .6rem; color: #d1d5db; pointer-events: none;
+  }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-mark">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>
+      </svg>
+    </div>
+    <h1>{title}</h1>
+    <p class="sub">{subtitle}</p>
+    <p id="st"></p>
+    <a href="/" id="btn" class="btn"
+       onclick="document.getElementById('btn').style.opacity='.5'">
+      Ir al inicio de sesión
+    </a>
+  </div>
+  <span class="ver">v{VERSION}</span>
   <script>{_CLEANUP_JS}</script>
-  <p style="position:fixed;bottom:.75rem;right:1rem;font-size:.75rem;opacity:.35">v{VERSION}</p>
 </body></html>"""
     resp = make_response(html)
     resp.headers["Clear-Site-Data"] = '"cache", "cookies", "storage"'
@@ -265,7 +303,7 @@ def admin_logout():
 
 
 # ---------------------------------------------------------------------------
-# Kiosko
+# Rutas principales
 # ---------------------------------------------------------------------------
 
 @app.route("/")
@@ -396,7 +434,6 @@ def nextcloud_catch(subpath):
 @app.route("/sw-kiosk.js")
 def sw_kiosk_js():
     js = """\
-// Kiosko SW permanente - La Nube NFC
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
@@ -414,7 +451,6 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 @app.route("/sw.js")
 def sw_js():
     js = """\
-// Auto-destructor SW - La Nube kiosko NFC
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
@@ -433,7 +469,7 @@ self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
 
 @app.route("/logout")
 def nc_logout():
-    """Intercepta el logout de NC: invalida sesión server-side y vuelve al kiosko."""
+    """Intercepta el logout de NC: invalida sesión server-side y redirige al inicio."""
     requesttoken = request.args.get("requesttoken", "")
     if requesttoken:
         try:
@@ -453,7 +489,7 @@ def nc_logout():
     for name in list(request.cookies.keys()):
         if not name.startswith("admin_"):
             resp.delete_cookie(name, path="/")
-    print("[LOGOUT] Sesión cerrada, volviendo al kiosko", flush=True)
+    print("[LOGOUT] Sesión cerrada", flush=True)
     return resp
 
 
@@ -461,7 +497,7 @@ def nc_logout():
 def reset():
     return _cleanup_page(
         title="Reparando pantalla…",
-        subtitle="Limpiando caché y service workers…",
+        subtitle="Limpiando caché y datos del navegador…",
     )
 
 
