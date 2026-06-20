@@ -5,104 +5,157 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>Ingresar · La Nube</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      font-family: "Segoe UI", system-ui, sans-serif;
-      background: linear-gradient(135deg, #0a2540 0%, #134e6f 100%);
-      color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      min-height: 100vh; padding: 1.5rem;
-    }
-    .card {
-      text-align: center; width: 100%; max-width: 420px;
-    }
-    .logo {
-      width: 100px; height: 100px; border-radius: 50%;
-      background: rgba(255,255,255,.1); margin: 0 auto 1.5rem;
-      display: flex; align-items: center; justify-content: center; font-size: 54px;
-    }
-    h1 { font-size: 2.2rem; margin-bottom: .3rem; font-weight: 600; }
-    p.sub { font-size: 1.05rem; opacity: .7; margin-bottom: 2rem; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
 
-    .form-box {
-      background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.12);
-      border-radius: 20px; padding: 2rem 1.75rem; text-align: left;
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: #f0f2f4;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
     }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 2.75rem 2.5rem 2.25rem;
+      width: 90%; max-width: 400px;
+      text-align: center;
+      box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 20px rgba(0,0,0,.06);
+    }
+
+    .logo-mark {
+      width: 44px; height: 44px;
+      background: #0f172a;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+
+    h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -.025em;
+      color: #0f172a;
+      margin-bottom: .25rem;
+    }
+
+    .sub {
+      font-size: .875rem;
+      color: #64748b;
+      margin-bottom: 2rem;
+    }
+
+    .form-area { text-align: left; }
+
     label {
-      display: block; font-size: .85rem; opacity: .7;
-      margin-bottom: .4rem; margin-top: 1.25rem;
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: .35rem;
+      margin-top: 1.1rem;
     }
     label:first-of-type { margin-top: 0; }
 
     .input-wrap { position: relative; }
-    input[type="text"], input[type="password"] {
-      width: 100%; padding: .9rem 1.1rem;
-      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.2);
-      border-radius: 12px; color: #fff; font-size: 1.1rem;
-      outline: none; transition: border-color .15s;
-    }
-    input[type="password"] { padding-right: 3.2rem; }
-    input:focus { border-color: #3ddc97; }
-    input::placeholder { opacity: .4; color: #fff; }
 
-    /* Fix autocomplete/autofill background */
-    input:-webkit-autofill,
-    input:-webkit-autofill:hover,
-    input:-webkit-autofill:focus {
-      -webkit-box-shadow: 0 0 0 50px #0d2d4a inset !important;
-      -webkit-text-fill-color: #fff !important;
-      caret-color: #fff;
-      transition: background-color 9999s ease-in-out 0s;
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: .7rem .9rem;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      color: #0f172a;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
     }
+    input[type="password"] { padding-right: 3rem; }
+    input:focus {
+      border-color: #0f172a;
+      box-shadow: 0 0 0 3px rgba(15,23,42,.07);
+    }
+    input::placeholder { color: #94a3b8; }
 
     .eye-btn {
-      position: absolute; right: .85rem; top: 50%; transform: translateY(-50%);
+      position: absolute; right: .75rem; top: 50%; transform: translateY(-50%);
       background: none; border: none; cursor: pointer;
-      color: rgba(255,255,255,.45); font-size: 1.2rem;
-      padding: .25rem; line-height: 1;
+      color: #94a3b8; font-size: 1.1rem;
+      padding: .2rem; line-height: 1;
       transition: color .15s;
     }
-    .eye-btn:hover { color: rgba(255,255,255,.85); }
+    .eye-btn:hover { color: #475569; }
 
     .error-box {
-      background: rgba(255,80,80,.15); border: 1px solid rgba(255,100,100,.3);
-      border-radius: 10px; padding: .8rem 1rem; font-size: .95rem;
-      color: #ff9a9a; margin-bottom: 1.25rem; text-align: center;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: .7rem .9rem;
+      font-size: .875rem;
+      color: #dc2626;
+      margin-bottom: 1rem;
+      text-align: center;
     }
 
     .btn-submit {
-      width: 100%; margin-top: 1.5rem; padding: 1.1rem;
-      background: #3ddc97; color: #071526;
-      border: none; border-radius: 14px;
-      font-size: 1.15rem; font-weight: 700;
-      cursor: pointer; transition: filter .15s;
+      width: 100%; margin-top: 1.25rem; padding: .75rem;
+      background: #0f172a; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: .95rem; font-weight: 600;
+      cursor: pointer; transition: background .15s;
     }
-    .btn-submit:hover { filter: brightness(1.08); }
-    .btn-submit:active { filter: brightness(.95); }
+    .btn-submit:hover  { background: #1e293b; }
+    .btn-submit:active { background: #070d18; }
     .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
 
-    .back-link {
-      display: block; margin-top: 1.5rem; text-align: center;
-      color: rgba(255,255,255,.5); font-size: .95rem; text-decoration: none;
+    hr {
+      border: none;
+      border-top: 1px solid #f1f5f9;
+      margin: 1.75rem 0 1.5rem;
     }
-    .back-link:hover { color: #fff; }
+
+    .links {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+    .back-link {
+      font-size: .875rem;
+      color: #64748b;
+      text-decoration: none;
+      text-align: center;
+      transition: color .15s;
+    }
+    .back-link:hover { color: #0f172a; }
 
     .ver {
-      position: fixed; bottom: .5rem; left: 50%; transform: translateX(-50%);
-      font-size: .7rem; opacity: .3; pointer-events: none;
+      position: fixed; bottom: .5rem; right: .75rem;
+      font-size: .6rem; color: #d1d5db; pointer-events: none;
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">&#x2601;&#xFE0F;</div>
+    <div class="logo-mark">
+      <!-- Lucide "cloud" -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>
+      </svg>
+    </div>
     <h1>La Nube</h1>
     <p class="sub">Ingresar con usuario y contraseña</p>
 
-    <div class="form-box">
+    <div class="form-area">
       {% if error %}
-      <div class="error-box">&#x274C; {{ error }}</div>
+      <div class="error-box">{{ error }}</div>
       {% endif %}
 
       <form method="POST" action="/auth-form" id="login-form">
@@ -120,8 +173,7 @@
           <input id="password" name="password" type="password"
                  placeholder="Contraseña"
                  autocomplete="current-password" required>
-          <button type="button" class="eye-btn" id="eye-btn"
-                  aria-label="Mostrar contraseña">
+          <button type="button" class="eye-btn" id="eye-btn" aria-label="Mostrar contraseña">
             &#x1F441;
           </button>
         </div>
@@ -132,18 +184,18 @@
       </form>
     </div>
 
-    <a class="back-link" href="/">&larr; Volver al kiosko de tarjetas</a>
-    <a class="back-link" href="/cambiar-clave"
-       style="margin-top:.5rem; color:rgba(255,255,255,.4);">
-      &#x1F511; Cambiar contraseña
-    </a>
+    <hr>
+
+    <div class="links">
+      <a class="back-link" href="/">&larr; Volver al kiosko</a>
+      <a class="back-link" href="/cambiar-clave">Cambiar contraseña</a>
+    </div>
   </div>
   <span class="ver">v{{ version }}</span>
 
   <script>
-  // Toggle ojito contraseña
-  const eyeBtn  = document.getElementById('eye-btn');
-  const passEl  = document.getElementById('password');
+  const eyeBtn = document.getElementById('eye-btn');
+  const passEl = document.getElementById('password');
   eyeBtn.addEventListener('click', () => {
     const show = passEl.type === 'password';
     passEl.type = show ? 'text' : 'password';
@@ -151,13 +203,12 @@
     passEl.focus();
   });
 
-  // Deshabilitar botón al enviar
   document.getElementById('login-form').addEventListener('submit', () => {
-    document.getElementById('submit-btn').disabled = true;
-    document.getElementById('submit-btn').textContent = 'Ingresando…';
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Ingresando…';
   });
 
-  // Auto-focus: si hay usuario prefill, ir al campo de contraseña
   const u = document.getElementById('username');
   const p = document.getElementById('password');
   if (u.value) { p.focus(); } else { u.focus(); }

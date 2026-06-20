@@ -5,111 +5,172 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>Cambiar contraseña · La Nube</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
+
     body {
-      font-family: "Segoe UI", system-ui, sans-serif;
-      background: linear-gradient(135deg, #0a2540 0%, #134e6f 100%);
-      color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      min-height: 100vh; padding: 1.5rem;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: #f0f2f4;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1.5rem;
     }
-    .card { text-align: center; width: 100%; max-width: 420px; }
-    .logo {
-      width: 100px; height: 100px; border-radius: 50%;
-      background: rgba(255,255,255,.1); margin: 0 auto 1.5rem;
-      display: flex; align-items: center; justify-content: center; font-size: 54px;
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 2.75rem 2.5rem 2.25rem;
+      width: 100%; max-width: 420px;
+      text-align: center;
+      box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 20px rgba(0,0,0,.06);
     }
-    h1 { font-size: 2.2rem; margin-bottom: .3rem; font-weight: 600; }
-    p.sub { font-size: 1.05rem; opacity: .7; margin-bottom: 1.2rem; }
+
+    .logo-mark {
+      width: 44px; height: 44px;
+      background: #0f172a;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+
+    h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -.025em;
+      color: #0f172a;
+      margin-bottom: .25rem;
+    }
+
+    .sub {
+      font-size: .875rem;
+      color: #64748b;
+      margin-bottom: 1.5rem;
+    }
 
     .nfc-hint {
-      font-size: .9rem; margin-bottom: 1.5rem;
-      background: rgba(61,220,151,.1); border: 1px solid rgba(61,220,151,.2);
-      border-radius: 10px; padding: .6rem 1rem; color: rgba(255,255,255,.7);
+      font-size: .8rem;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: .55rem .85rem;
+      color: #64748b;
+      margin-bottom: 1.5rem;
       transition: all .3s;
     }
     .nfc-hint.detected {
-      background: rgba(61,220,151,.2); border-color: rgba(61,220,151,.4);
-      color: #3ddc97;
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #16a34a;
     }
 
-    .form-box {
-      background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.12);
-      border-radius: 20px; padding: 2rem 1.75rem; text-align: left;
-    }
+    .form-area { text-align: left; }
+
     label {
-      display: block; font-size: .85rem; opacity: .7;
-      margin-bottom: .4rem; margin-top: 1.25rem;
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: .35rem;
+      margin-top: 1.1rem;
     }
     label:first-of-type { margin-top: 0; }
 
     .input-wrap { position: relative; }
+
     input[type="text"], input[type="password"] {
-      width: 100%; padding: .9rem 1.1rem;
-      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.2);
-      border-radius: 12px; color: #fff; font-size: 1.1rem;
-      outline: none; transition: border-color .15s;
+      width: 100%;
+      padding: .7rem .9rem;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      color: #0f172a;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
     }
-    input[type="password"] { padding-right: 3.2rem; }
-    input:focus { border-color: #3ddc97; }
-    input::placeholder { opacity: .4; color: #fff; }
-    input:-webkit-autofill,
-    input:-webkit-autofill:hover,
-    input:-webkit-autofill:focus {
-      -webkit-box-shadow: 0 0 0 50px #0d2d4a inset !important;
-      -webkit-text-fill-color: #fff !important;
-      caret-color: #fff;
-      transition: background-color 9999s ease-in-out 0s;
+    input[type="password"] { padding-right: 3rem; }
+    input:focus {
+      border-color: #0f172a;
+      box-shadow: 0 0 0 3px rgba(15,23,42,.07);
     }
+    input::placeholder { color: #94a3b8; }
 
     .eye-btn {
-      position: absolute; right: .85rem; top: 50%; transform: translateY(-50%);
+      position: absolute; right: .75rem; top: 50%; transform: translateY(-50%);
       background: none; border: none; cursor: pointer;
-      color: rgba(255,255,255,.45); font-size: 1.2rem;
-      padding: .25rem; line-height: 1; transition: color .15s;
+      color: #94a3b8; font-size: 1.1rem;
+      padding: .2rem; line-height: 1;
+      transition: color .15s;
     }
-    .eye-btn:hover { color: rgba(255,255,255,.85); }
+    .eye-btn:hover { color: #475569; }
 
     .error-box {
-      background: rgba(255,80,80,.15); border: 1px solid rgba(255,100,100,.3);
-      border-radius: 10px; padding: .8rem 1rem; font-size: .95rem;
-      color: #ff9a9a; margin-bottom: 1.25rem; text-align: center;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: .7rem .9rem;
+      font-size: .875rem;
+      color: #dc2626;
+      margin-bottom: 1rem;
+      text-align: center;
     }
 
     .btn-submit {
-      width: 100%; margin-top: 1.5rem; padding: 1.1rem;
-      background: #3ddc97; color: #071526;
-      border: none; border-radius: 14px;
-      font-size: 1.15rem; font-weight: 700;
-      cursor: pointer; transition: filter .15s;
+      width: 100%; margin-top: 1.25rem; padding: .75rem;
+      background: #0f172a; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: .95rem; font-weight: 600;
+      cursor: pointer; transition: background .15s;
     }
-    .btn-submit:hover { filter: brightness(1.08); }
-    .btn-submit:active { filter: brightness(.95); }
+    .btn-submit:hover  { background: #1e293b; }
+    .btn-submit:active { background: #070d18; }
     .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
 
-    .back-link {
-      display: block; margin-top: 1.5rem; text-align: center;
-      color: rgba(255,255,255,.5); font-size: .95rem; text-decoration: none;
+    hr {
+      border: none;
+      border-top: 1px solid #f1f5f9;
+      margin: 1.75rem 0 1.5rem;
     }
-    .back-link:hover { color: #fff; }
+
+    .back-link {
+      display: block;
+      font-size: .875rem;
+      color: #64748b;
+      text-decoration: none;
+      text-align: center;
+      transition: color .15s;
+    }
+    .back-link:hover { color: #0f172a; }
 
     .success-box {
-      background: rgba(61,220,151,.12); border: 1px solid rgba(61,220,151,.3);
-      border-radius: 20px; padding: 2.5rem 2rem; text-align: center;
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      border-radius: 10px;
+      padding: 2.25rem 1.75rem;
+      text-align: center;
     }
-    .success-icon { font-size: 4.5rem; margin-bottom: 1rem; }
-    .success-box h2 { font-size: 1.7rem; color: #3ddc97; margin-bottom: .6rem; }
-    .success-box p { opacity: .8; margin-bottom: 1.5rem; line-height: 1.5; }
+    .success-icon { font-size: 3rem; margin-bottom: .75rem; }
+    .success-box h2 { font-size: 1.35rem; color: #16a34a; margin-bottom: .5rem; }
+    .success-box p { font-size: .9rem; color: #64748b; line-height: 1.5; margin-bottom: 1.25rem; }
+    .success-box .btn-submit {
+      display: inline-block; text-decoration: none;
+      width: auto; padding: .65rem 2rem;
+    }
+
+    .ver {
+      position: fixed; bottom: .5rem; right: .75rem;
+      font-size: .6rem; color: #d1d5db; pointer-events: none;
+    }
 
     #nfc-field {
       position: fixed; top: -9999px; left: -9999px;
       opacity: 0; width: 1px; height: 1px;
-    }
-
-    .ver {
-      position: fixed; bottom: .5rem; left: 50%; transform: translateX(-50%);
-      font-size: .7rem; opacity: .3; pointer-events: none;
     }
   </style>
 </head>
@@ -117,18 +178,23 @@
   <input id="nfc-field" type="text" autocomplete="off" tabindex="-1">
 
   <div class="card">
-    <div class="logo">&#x1F511;</div>
+    <div class="logo-mark">
+      <!-- Lucide "cloud" -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>
+      </svg>
+    </div>
     <h1>Cambiar contraseña</h1>
     <p class="sub">La tarjeta NFC se actualizará automáticamente</p>
 
     {% if success %}
     <div class="success-box">
       <div class="success-icon">&#x2705;</div>
-      <h2>¡Contraseña actualizada!</h2>
+      <h2>Contraseña actualizada</h2>
       <p>La tarjeta NFC de <strong>{{ changed_user }}</strong> quedó sincronizada.<br>
          Volviendo al kiosko en <span id="ct">5</span>s…</p>
-      <a href="/" class="btn-submit"
-         style="display:inline-block;text-decoration:none;width:auto;padding:.9rem 2.5rem;">
+      <a href="/" class="btn-submit" style="display:inline-block;text-decoration:none;width:auto;padding:.65rem 2rem;">
         Ir al kiosko
       </a>
     </div>
@@ -136,12 +202,12 @@
     {% else %}
 
     <div class="nfc-hint" id="nfc-hint">
-      &#x1F4F1; Pasá la tarjeta NFC para autocompletar el usuario
+      Pasá la tarjeta NFC para autocompletar el usuario
     </div>
 
-    <div class="form-box">
+    <div class="form-area">
       {% if error %}
-      <div class="error-box">&#x274C; {{ error }}</div>
+      <div class="error-box">{{ error }}</div>
       {% endif %}
 
       <form method="POST" action="/cambiar-clave" id="change-form">
@@ -185,12 +251,12 @@
     </div>
     {% endif %}
 
+    <hr>
     <a class="back-link" href="/">&larr; Volver al kiosko</a>
   </div>
   <span class="ver">v{{ version }}</span>
 
   <script>
-  // Eye buttons
   document.querySelectorAll('.eye-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const inp = document.getElementById(btn.dataset.target);
@@ -201,7 +267,6 @@
     });
   });
 
-  // Disable button on submit
   const form = document.getElementById('change-form');
   if (form) {
     form.addEventListener('submit', () => {
@@ -210,7 +275,6 @@
     });
   }
 
-  // NFC auto-fill
   const nfcField  = document.getElementById('nfc-field');
   const userField = document.getElementById('username');
   const nfcHint   = document.getElementById('nfc-hint');
@@ -251,7 +315,7 @@
         if (data.ok && userField) {
           userField.value = data.user;
           if (nfcHint) {
-            nfcHint.textContent = '✅ Tarjeta detectada: ' + data.name;
+            nfcHint.textContent = 'Tarjeta detectada: ' + data.name;
             nfcHint.classList.add('detected');
           }
           const oldPass = document.getElementById('old_password');
@@ -261,7 +325,6 @@
       .catch(() => {});
   }
 
-  // Success countdown
   const ct = document.getElementById('ct');
   if (ct) {
     let n = 5;
@@ -272,7 +335,6 @@
     }, 1000);
   }
 
-  // Auto-focus on load
   if (userField) {
     if (userField.value) {
       const oldPass = document.getElementById('old_password');
