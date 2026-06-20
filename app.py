@@ -26,7 +26,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "2026-06-18.1"
+VERSION              = "2026-06-18.2"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -332,7 +332,6 @@ def auth_form():
 
     print(f"[AUTH-FORM] user={username}", flush=True)
 
-    # Genera app-token (verifica credenciales y lo usamos para abrir sesión)
     app_token, err = _get_app_token(username, password)
     if err:
         print(f"[AUTH-FORM] OCS RECHAZADO user={username}: {err}", flush=True)
@@ -340,7 +339,6 @@ def auth_form():
                                 error="Usuario o contraseña incorrectos",
                                 user=username))
 
-    # Abre sesión NC via Basic Auth con el app-token
     s, err = _nc_session_from_token(username, app_token)
     if err:
         print(f"[AUTH-FORM] SESSION ERROR user={username}: {err}", flush=True)
