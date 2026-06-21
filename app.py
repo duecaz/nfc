@@ -1,4 +1,6 @@
-"""\nKiosko NFC -> Nextcloud (lanube.uno)\n"""
+"""
+Kiosko NFC -> Nextcloud (lanube.uno)
+"""
 import json
 import os
 import re
@@ -24,7 +26,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "7"
+VERSION              = "8"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None

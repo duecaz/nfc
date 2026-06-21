@@ -261,14 +261,14 @@
           resetSoon();
         }
       } catch (e) {
-        setStatus('Error de conexión', 'err');
+        setStatus('Error de conexi\xF3n', 'err');
         resetSoon();
       }
     }
 
     function resetSoon() {
       setTimeout(() => {
-        setStatus('Acercá tu tarjeta para ingresar');
+        setStatus('Acerc\xE1 tu tarjeta para ingresar');
         uidEl.textContent = '';
       }, 4000);
     }
@@ -280,6 +280,45 @@
         if (uid.length >= 4) authenticate(uid);
       }
     });
+
+    // Web NFC (Chrome Android 89+) — si est\xE1 disponible, aparece bot\xF3n para activarlo
+    if ('NDEFReader' in window) {
+      const nfcWrap = document.createElement('div');
+      nfcWrap.style.cssText = 'margin-top:.65rem';
+      const nfcBtn = document.createElement('button');
+      nfcBtn.className = 'btn btn-outline';
+      nfcBtn.style.cssText = 'width:100%;font-size:.82rem;padding:.55rem 1rem';
+      nfcBtn.textContent = '📱 Activar NFC (Android)';
+      nfcWrap.appendChild(nfcBtn);
+      document.querySelector('.actions').after(nfcWrap);
+
+      let nfcActive = false;
+      async function startWebNFC() {
+        try {
+          const ndef = new NDEFReader();
+          await ndef.scan();
+          nfcActive = true;
+          nfcBtn.textContent = '📶 NFC activo — acerc\xE1 la tarjeta';
+          nfcBtn.style.color = '#16a34a';
+          nfcBtn.style.borderColor = '#16a34a';
+          ndef.addEventListener('reading', ({ serialNumber }) => {
+            const uid = serialNumber.split(':').join('').toUpperCase();
+            if (uid.length >= 4) authenticate(uid);
+          });
+          ndef.addEventListener('error', () => {
+            if (!nfcActive) return;
+            nfcBtn.textContent = '📱 Activar NFC (Android)';
+            nfcBtn.style.color = '';
+            nfcBtn.style.borderColor = '';
+            nfcActive = false;
+          });
+        } catch {
+          nfcBtn.textContent = '📱 Activar NFC (Android)';
+        }
+      }
+      nfcBtn.addEventListener('click', startWebNFC);
+      startWebNFC();
+    }
   </script>
 </body>
 </html>

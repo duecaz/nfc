@@ -7,6 +7,16 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* SHARED */
+    .input-wrap { position: relative; }
+    .input-wrap input { padding-right: 3rem !important; }
+    .eye-btn {
+      position: absolute; right: .75rem; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      font-size: 1.1rem; padding: .2rem; line-height: 1;
+      transition: color .15s; z-index: 1;
+    }
+
     {% if not authenticated %}
     /* ===== LOGIN ===== */
     html, body { height: 100%; }
@@ -30,25 +40,16 @@
     h1 { font-size: 1.55rem; font-weight: 700; letter-spacing: -.025em; color: #0f172a; margin-bottom: .25rem; }
     .sub { font-size: .875rem; color: #64748b; margin-bottom: 2rem; }
     .form-area { text-align: left; }
-    label {
-      display: block; font-size: .8rem; font-weight: 600;
-      color: #374151; margin-bottom: .35rem;
-    }
-    .input-wrap { position: relative; }
-    input[type="password"] {
-      width: 100%; padding: .7rem .9rem; padding-right: 3rem;
+    label { display: block; font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: .35rem; }
+    input[type="password"], input[type="text"] {
+      width: 100%; padding: .7rem .9rem;
       background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
       color: #0f172a; font-size: .95rem; outline: none;
       transition: border-color .15s, box-shadow .15s;
     }
     input:focus { border-color: #0f172a; box-shadow: 0 0 0 3px rgba(15,23,42,.07); }
     input::placeholder { color: #94a3b8; }
-    .eye-btn {
-      position: absolute; right: .75rem; top: 50%; transform: translateY(-50%);
-      background: none; border: none; cursor: pointer;
-      color: #94a3b8; font-size: 1.1rem; padding: .2rem; line-height: 1;
-      transition: color .15s;
-    }
+    .eye-btn { color: #94a3b8; }
     .eye-btn:hover { color: #475569; }
     .error-box {
       background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
@@ -57,10 +58,8 @@
     }
     .btn-submit {
       width: 100%; margin-top: 1.25rem; padding: .75rem;
-      background: #0f172a; color: #fff;
-      border: none; border-radius: 8px;
-      font-size: .95rem; font-weight: 600;
-      cursor: pointer; transition: background .15s;
+      background: #0f172a; color: #fff; border: none; border-radius: 8px;
+      font-size: .95rem; font-weight: 600; cursor: pointer; transition: background .15s;
     }
     .btn-submit:hover { background: #1e293b; }
     .btn-submit:active { background: #070d18; }
@@ -70,169 +69,175 @@
       text-decoration: none; text-align: center; transition: color .15s;
     }
     .back-link:hover { color: #0f172a; }
-    .ver {
-      position: fixed; bottom: .5rem; right: .75rem;
-      font-size: .6rem; color: #d1d5db; pointer-events: none;
-    }
+    .ver { position: fixed; bottom: .5rem; right: .75rem; font-size: .6rem; color: #d1d5db; pointer-events: none; }
 
     {% else %}
     /* ===== PANEL ===== */
     body {
       font-family: "Segoe UI", system-ui, sans-serif;
       background: #0a1628; color: #e2e8f0;
-      min-height: 100vh; padding: 1.5rem;
+      min-height: 100vh; padding: 1.5rem 1.5rem 3rem;
     }
-    h1 { font-size: 1.8rem; font-weight: 700; }
-    h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 1.2rem; color: #94a3b8; }
+    h1 { font-size: 1.55rem; font-weight: 700; }
+    h2 { font-size: .95rem; font-weight: 600; margin-bottom: .8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
     header {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 2rem; padding-bottom: 1rem;
-      border-bottom: 1px solid #1e3a5f;
+      margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid #1e3a5f;
     }
     .header-links { display: flex; gap: 1.2rem; }
-    .header-links a { color: #38bdf8; text-decoration: none; font-size: .95rem; }
+    .header-links a { color: #38bdf8; text-decoration: none; font-size: .9rem; }
     .header-links a:hover { text-decoration: underline; }
     .header-links a.logout { color: #f87171; }
 
-    .grid { display: grid; gap: 1.5rem; }
-    @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
-
     .card {
       background: #0f2442; border: 1px solid #1e3a5f;
-      border-radius: 16px; padding: 1.5rem;
+      border-radius: 16px; padding: 1.25rem; margin-bottom: .85rem;
     }
-    .card-hint {
-      color: #64748b; font-size: .85rem; margin-bottom: 1rem; line-height: 1.6;
-    }
-    label {
-      display: block; font-size: .85rem; color: #94a3b8;
-      margin-bottom: .35rem; margin-top: 1rem;
-    }
+    .card-hint { color: #64748b; font-size: .82rem; margin-bottom: .75rem; line-height: 1.6; }
+
+    label { display: block; font-size: .8rem; color: #94a3b8; margin-bottom: .3rem; margin-top: .85rem; }
     label:first-of-type { margin-top: 0; }
     input[type="text"], input[type="password"] {
-      width: 100%; padding: .75rem 1rem;
+      width: 100%; padding: .65rem .9rem;
       background: #0a1e38; border: 1px solid #2d5080;
-      border-radius: 10px; color: #e2e8f0; font-size: 1rem;
+      border-radius: 10px; color: #e2e8f0; font-size: .92rem;
       outline: none; transition: border-color .15s;
     }
-    input:focus { border-color: #38bdf8; }
+    input[type="text"]:focus, input[type="password"]:focus { border-color: #38bdf8; }
+    input::placeholder { color: #475569; }
     textarea {
-      width: 100%; padding: .75rem 1rem; resize: vertical;
+      width: 100%; padding: .65rem .9rem; resize: vertical;
       background: #0a1e38; border: 1px solid #2d5080;
-      border-radius: 10px; color: #e2e8f0; font-size: .9rem;
+      border-radius: 10px; color: #e2e8f0; font-size: .82rem;
       font-family: monospace; outline: none; transition: border-color .15s;
     }
     textarea:focus { border-color: #38bdf8; }
+    .eye-btn { color: #3a5a7a; }
+    .eye-btn:hover { color: #94a3b8; }
 
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    /* Credentials bar */
+    .creds-row { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
+    .creds-field { flex: 1; min-width: 130px; }
+    .creds-field label { margin-top: 0; }
 
-    .uid-zone {
-      margin-top: 1rem; background: #071526;
-      border: 2px dashed #2d5080; border-radius: 12px;
-      padding: 1rem; text-align: center;
-    }
-    .uid-label { font-size: .8rem; color: #64748b; margin-bottom: .5rem; }
-    #uid-display {
-      font-family: monospace; font-size: 1.15rem; letter-spacing: .05em;
-      color: #64748b; margin-bottom: .75rem; min-height: 1.5rem;
-    }
-    #uid-display.ready { color: #3ddc97; }
-    #uid-capture { position: absolute; left: -9999px; top: 0; opacity: 0; }
-    .nc-uid-capture { position: absolute; left: -9999px; top: 0; opacity: 0; }
-    .nc-uid-display {
-      font-family: monospace; font-size: 1.1rem; letter-spacing: .05em;
-      color: #64748b; margin-bottom: .75rem; min-height: 1.5rem;
-    }
-    .nc-uid-display.ready { color: #3ddc97; }
-
+    /* Buttons */
     .btn {
-      display: inline-block; width: 100%; padding: .85rem 1rem;
-      border: none; border-radius: 10px; font-size: 1rem; font-weight: 600;
-      cursor: pointer; transition: filter .15s; margin-top: .75rem;
+      display: inline-block; width: 100%; padding: .75rem 1rem;
+      border: none; border-radius: 10px; font-size: .92rem; font-weight: 600;
+      cursor: pointer; transition: filter .15s; margin-top: .65rem;
     }
     .btn:hover:not(:disabled) { filter: brightness(1.1); }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-sm { width: auto; padding: .65rem 1rem; margin-top: 0; white-space: nowrap; }
     .btn-scan   { background: #1e3a5f; color: #e2e8f0; }
     .btn-scan.scanning { background: #0f3460; color: #38bdf8; }
     .btn-save   { background: #3ddc97; color: #071526; }
     .btn-bulk   { background: #7c3aed; color: #fff; }
     .btn-nc     { background: #0369a1; color: #fff; }
-    .btn-del    {
-      width: auto; padding: .4rem .9rem; font-size: .85rem;
-      background: #450a0a; color: #fca5a5;
-      border-radius: 8px; margin-top: 0;
-    }
+    .btn-del  { width: auto; padding: .35rem .8rem; font-size: .8rem; background: #450a0a; color: #fca5a5; border-radius: 8px; margin-top: 0; }
     .btn-del:hover { background: #7f1d1d; }
-    .btn-edit   {
-      width: auto; padding: .4rem .9rem; font-size: .85rem;
-      background: #0c2a4a; color: #7dd3fc;
-      border-radius: 8px; margin-top: 0;
-    }
+    .btn-edit { width: auto; padding: .35rem .8rem; font-size: .8rem; background: #0c2a4a; color: #7dd3fc; border-radius: 8px; margin-top: 0; }
     .btn-edit:hover { background: #1e4a7a; }
 
-    .msg {
-      margin-top: .75rem; padding: .75rem 1rem;
-      border-radius: 10px; font-size: .95rem; display: none;
-    }
+    .msg { margin-top: .65rem; padding: .6rem .9rem; border-radius: 10px; font-size: .88rem; display: none; }
     .msg.show { display: block; }
     .msg.ok   { background: #052e16; color: #86efac; }
     .msg.err  { background: #450a0a; color: #fca5a5; }
     .msg.info { background: #0c2a4a; color: #7dd3fc; }
 
-    .card-list { display: flex; flex-direction: column; gap: .75rem; }
+    /* Tabs */
+    .tabs { display: flex; gap: .35rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .tab {
+      padding: .38rem .85rem; border-radius: 8px; border: 1px solid #1e3a5f;
+      background: transparent; color: #64748b; font-size: .85rem; cursor: pointer;
+      transition: all .15s;
+    }
+    .tab:hover { border-color: #38bdf8; color: #38bdf8; }
+    .tab.active { background: #1e3a5f; color: #e2e8f0; border-color: #2d5080; }
+    .tab .cnt {
+      display: inline-block; margin-left: .3rem;
+      background: #0a1e38; border-radius: 99px; padding: .05rem .38rem;
+      font-size: .7rem; font-weight: 700;
+    }
+    .tab.active .cnt { background: #071526; }
+
+    /* Collapsibles */
+    details.card { padding: 0; }
+    details.card > summary {
+      padding: 1rem 1.25rem; cursor: pointer; list-style: none;
+      font-size: .97rem; font-weight: 600; color: #94a3b8;
+      display: flex; align-items: center; justify-content: space-between;
+      user-select: none;
+    }
+    details.card > summary::-webkit-details-marker { display: none; }
+    details.card > summary::after { content: '\203A'; font-size: 1.3rem; color: #4a6280; transition: transform .2s; }
+    details[open].card > summary::after { transform: rotate(90deg); }
+    details.card > summary:hover { color: #e2e8f0; }
+    .details-body { padding: 0 1.25rem 1.25rem; }
+    .details-sep { border: none; border-top: 1px solid #1e3a5f; margin: 1.1rem 0; }
+
+    /* Card entries */
+    .card-list { display: flex; flex-direction: column; gap: .55rem; }
     .card-entry { border-radius: 10px; overflow: hidden; }
     .card-row {
-      display: flex; align-items: center; gap: .75rem;
-      background: #071526; border: 1px solid #1e3a5f; padding: .85rem 1rem;
+      display: flex; align-items: center; gap: .6rem;
+      background: #071526; border: 1px solid #1e3a5f; padding: .75rem .9rem;
     }
     .card-entry .card-row { border-radius: 0; }
     .card-entry .card-row:first-child { border-radius: 10px 10px 0 0; }
     .card-entry:not(.editing) .card-row:first-child { border-radius: 10px; }
     .card-info { flex: 1; min-width: 0; }
-    .card-name { font-weight: 600; font-size: 1rem; white-space: nowrap;
-                 overflow: hidden; text-overflow: ellipsis; }
-    .card-user { font-size: .8rem; color: #64748b; margin-top: .1rem; }
-    .card-uid  { font-family: monospace; font-size: .75rem; color: #475569; margin-top: .2rem; }
-    .badge { font-size: .75rem; padding: .2rem .55rem; border-radius: 6px;
-             white-space: nowrap; font-weight: 600; }
+    .card-name { font-weight: 600; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-user { font-size: .76rem; color: #64748b; margin-top: .1rem; }
+    .card-uid  { font-family: monospace; font-size: .7rem; color: #475569; margin-top: .15rem; }
+    .badge { font-size: .7rem; padding: .18rem .48rem; border-radius: 6px; white-space: nowrap; font-weight: 600; }
     .badge.token    { background: #052e16; color: #86efac; }
     .badge.password { background: #422006; color: #fdba74; }
     .badge.no-card  { background: #1e293b; color: #94a3b8; }
-    .empty { color: #475569; font-size: .95rem; text-align: center; padding: 1.5rem 0; }
+    .empty { color: #475569; font-size: .88rem; text-align: center; padding: 1.1rem 0; }
 
     .edit-panel {
       display: none; background: #040f1e;
       border: 1px solid #1e3a5f; border-top: none;
-      border-radius: 0 0 10px 10px; padding: 1rem 1rem 1.2rem;
+      border-radius: 0 0 10px 10px; padding: .85rem .9rem 1rem;
     }
     .card-entry.editing .edit-panel { display: block; }
-    .edit-panel label { margin-top: .75rem; }
+    .edit-panel label { margin-top: .6rem; }
     .edit-panel label:first-of-type { margin-top: 0; }
     .edit-panel small { color: #475569; font-weight: 400; }
-    .edit-actions { display: flex; gap: .6rem; margin-top: .85rem; }
-    .edit-actions .btn { flex: 1; padding: .65rem .8rem; font-size: .9rem; margin-top: 0; }
+    .edit-actions { display: flex; gap: .5rem; margin-top: .75rem; }
+    .edit-actions .btn { flex: 1; padding: .58rem .75rem; font-size: .875rem; margin-top: 0; }
     .btn-save-ep   { background: #3ddc97; color: #071826; }
     .btn-cancel-ep { background: #1e3a5f; color: #94a3b8; }
-    .ep-msg { margin-top: .6rem; font-size: .85rem; min-height: 1.2rem; }
+    .ep-msg { margin-top: .45rem; font-size: .8rem; min-height: 1rem; }
 
-    .bulk-row { padding: .35rem 0; border-bottom: 1px solid #0f2442;
-                font-size: .85rem; font-family: monospace; }
-    .bulk-row:last-child { border-bottom: none; }
-    .bulk-summary { margin-top: .75rem; font-size: .9rem; font-weight: 600; }
-
-    .nc-summary {
-      font-size: .85rem; color: #94a3b8; margin-bottom: .75rem;
-      display: flex; gap: 1.5rem;
+    /* NFC scan zone */
+    .uid-zone {
+      margin-top: .85rem; background: #071526;
+      border: 2px dashed #2d5080; border-radius: 12px;
+      padding: .85rem; text-align: center;
     }
-    .nc-summary span { display: inline-flex; align-items: center; gap: .3rem; }
+    .uid-label { font-size: .76rem; color: #64748b; margin-bottom: .4rem; }
+    #uid-display, .nc-uid-display {
+      font-family: monospace; font-size: 1rem; letter-spacing: .05em;
+      color: #64748b; margin-bottom: .55rem; min-height: 1.3rem;
+    }
+    #uid-display.ready, .nc-uid-display.ready { color: #3ddc97; }
+    #uid-capture { position: absolute; left: -9999px; top: 0; opacity: 0; }
+    .nc-uid-capture { position: absolute; left: -9999px; top: 0; opacity: 0; }
 
-    footer { margin-top: 2.5rem; text-align: center; color: #334155; font-size: .75rem; }
+    .bulk-row { padding: .28rem 0; border-bottom: 1px solid #0f2442; font-size: .8rem; font-family: monospace; }
+    .bulk-row:last-child { border-bottom: none; }
+    .bulk-summary { margin-top: .6rem; font-size: .85rem; font-weight: 600; }
+
+    footer { margin-top: 2rem; text-align: center; color: #334155; font-size: .75rem; }
     {% endif %}
   </style>
 </head>
 <body>
 
 {% if not authenticated %}
+  <!-- ===== LOGIN ===== -->
   <div class="card">
     <div class="logo-mark">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -254,7 +259,7 @@
           <input id="password" name="password" type="password"
                  placeholder="Contraseña de administrador"
                  autofocus autocomplete="current-password" required>
-          <button type="button" class="eye-btn" id="eye-btn">&#x1F441;</button>
+          <button type="button" class="eye-btn">&#x1F441;</button>
         </div>
         <button class="btn-submit" type="submit">Entrar</button>
       </form>
@@ -266,33 +271,107 @@
   <span class="ver">v{{ version }}</span>
 
   <script>
-  const eyeBtn = document.getElementById('eye-btn');
-  const passEl = document.getElementById('password');
-  eyeBtn.addEventListener('click', () => {
-    const show = passEl.type === 'password';
-    passEl.type = show ? 'text' : 'password';
-    eyeBtn.textContent = show ? '🙈' : '👁';
-    passEl.focus();
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.eye-btn');
+    if (!btn) return;
+    const wrap = btn.closest('.input-wrap');
+    const inp  = wrap?.querySelector('input');
+    if (!inp) return;
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.textContent = show ? '\u{1F648}' : '\u{1F441}';
+    inp.focus();
   });
   </script>
 
 {% else %}
+  <!-- ===== PANEL ===== -->
   <header>
-    <h1>&#x2699;&#xFE0F; Admin NFC &middot; La Nube</h1>
+    <h1>&#x2699;&#xFE0F; Admin &middot; La Nube</h1>
     <div class="header-links">
       <a href="/">&#x2190; Inicio</a>
       <a href="/admin/logout" class="logout">Cerrar sesi&oacute;n</a>
     </div>
   </header>
 
-  <div class="grid">
+  <!-- 1. CREDENCIALES NC ADMIN -->
+  <div class="card">
+    <div class="creds-row">
+      <div class="creds-field">
+        <label for="nc-admin-user">Admin Nextcloud</label>
+        <input id="nc-admin-user" type="text" placeholder="admin"
+               autocomplete="off" autocapitalize="none">
+      </div>
+      <div class="creds-field">
+        <label for="nc-admin-pass">Contrase&ntilde;a</label>
+        <div class="input-wrap">
+          <input id="nc-admin-pass" type="password" autocomplete="current-password">
+          <button class="eye-btn" type="button">&#x1F441;</button>
+        </div>
+      </div>
+      <div style="align-self:flex-end">
+        <button class="btn btn-nc btn-sm" id="load-users-btn">&#x1F504; Cargar docentes</button>
+      </div>
+    </div>
+    <div class="msg err" id="nc-users-error" style="margin-top:.65rem"></div>
+  </div>
 
-    <div class="card">
-      <h2>Nueva tarjeta NFC</h2>
-      <label for="nc_user">Usuario en Nextcloud</label>
+  <!-- 2. LISTA DE DOCENTES -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" data-filter="all">
+        Todos <span class="cnt" id="tab-all-cnt">0</span>
+      </button>
+      <button class="tab" data-filter="no-card">
+        Sin tarjeta <span class="cnt" id="tab-nocard-cnt">0</span>
+      </button>
+      <button class="tab" data-filter="card">
+        Con tarjeta <span class="cnt" id="tab-card-cnt">0</span>
+      </button>
+    </div>
+    <p class="empty" id="nc-placeholder">Ingres&aacute; las credenciales y pres&iacute; <b>Cargar docentes</b>.</p>
+    <div class="card-list" id="nc-users-list" style="display:none"></div>
+  </div>
+
+  <!-- 3. OPERACIONES MASIVAS (collapsible) -->
+  <details class="card">
+    <summary><span>&#x26A1; Operaciones masivas</span></summary>
+    <div class="details-body">
+      <h2>Paso 1 &mdash; Crear cuentas en Nextcloud</h2>
+      <p class="card-hint">Formato: <code style="color:#7dd3fc">usuario,contrase&ntilde;a[,nombre][,email]</code></p>
+      <textarea id="nc-csv" rows="5"
+        placeholder="jperez,Profe2026!,Juan Pérez,jperez@colegio.edu&#10;mgarcia,Profe2026!,María García"></textarea>
+      <button class="btn btn-nc" id="nc-btn">&#x1F465; Crear cuentas en Nextcloud</button>
+      <div id="nc-results" style="display:none;margin-top:.85rem"><div id="nc-list"></div></div>
+
+      <hr class="details-sep">
+
+      <h2>Paso 2 &mdash; Registrar tarjetas NFC en lote</h2>
+      <p class="card-hint">Formato: <code style="color:#7dd3fc">uid,usuario,contrase&ntilde;a[,nombre]</code></p>
+      <textarea id="bulk-csv" rows="5"
+        placeholder="53A3A343300001,jperez,Profe2026!&#10;1234567890AB,mgarcia,Profe2026!,María García"></textarea>
+      <button class="btn btn-bulk" id="bulk-btn">&#x26A1; Registrar tarjetas en lote</button>
+      <div id="bulk-results" style="display:none;margin-top:.85rem"><div id="bulk-list"></div></div>
+    </div>
+  </details>
+
+  <!-- 4. TARJETAS REGISTRADAS (collapsible) -->
+  <details class="card">
+    <summary>
+      <span>&#x1F4C7; Tarjetas registradas
+        <span id="count" style="color:#38bdf8;font-size:.85em;margin-left:.4rem">({{ users|length }})</span>
+      </span>
+    </summary>
+    <div class="details-body">
+
+      <h2>Asignar tarjeta individual</h2>
+      <label for="nc_user">Usuario Nextcloud</label>
       <input id="nc_user" type="text" placeholder="Ej: jperez" autocomplete="off" autocapitalize="none">
-      <label for="nc_pass">Contrase&ntilde;a Nextcloud <span style="color:#475569;font-weight:400">(no se guarda)</span></label>
-      <input id="nc_pass" type="password" autocomplete="current-password">
+      <label for="nc_pass">Contrase&ntilde;a NC <span style="color:#475569;font-weight:400">(no se guarda)</span></label>
+      <div class="input-wrap">
+        <input id="nc_pass" type="password" autocomplete="current-password">
+        <button class="eye-btn" type="button">&#x1F441;</button>
+      </div>
       <div class="uid-zone">
         <div class="uid-label">UID de la tarjeta NFC</div>
         <div id="uid-display">&mdash; Sin escanear &mdash;</div>
@@ -301,12 +380,10 @@
       <input id="uid-capture" type="text" autocomplete="off">
       <div class="msg" id="reg-msg"></div>
       <button class="btn btn-save" id="reg-btn" disabled>Guardar y generar token</button>
-    </div>
 
-    <div class="card">
-      <h2>Tarjetas registradas
-        <span style="color:#38bdf8;font-size:.95rem" id="count">({{ users|length }})</span>
-      </h2>
+      <hr class="details-sep">
+
+      <h2>Tarjetas en esta pantalla</h2>
       <div class="card-list" id="card-list">
         {% for uid, info in users.items() %}
         <div class="card-entry" id="entry-{{ uid }}">
@@ -328,7 +405,10 @@
             <label>Nombre para mostrar</label>
             <input type="text" class="ep-name" value="{{ info.get('name', info.get('user', '')) }}" autocomplete="off">
             <label>Contrase&ntilde;a NC para regenerar token <small>(dejar vac&iacute;o para no cambiar)</small></label>
-            <input type="password" class="ep-pass" autocomplete="current-password">
+            <div class="input-wrap">
+              <input type="password" class="ep-pass" autocomplete="current-password">
+              <button class="eye-btn" type="button">&#x1F441;</button>
+            </div>
             <div class="edit-actions">
               <button class="btn btn-save-ep"   data-uid="{{ uid }}">Guardar</button>
               <button class="btn btn-cancel-ep" data-uid="{{ uid }}">Cancelar</button>
@@ -341,81 +421,241 @@
         {% endfor %}
       </div>
     </div>
-
-  </div>
-
-  <div class="card" style="margin-top:1.5rem">
-    <h2>&#x1F511; Admin Nextcloud</h2>
-    <p class="card-hint">
-      Estas credenciales se usan para cargar la lista de docentes y para crear cuentas en lote.<br>
-      Se ingresan una vez y se reutilizan en todas las operaciones de abajo.
-    </p>
-    <div class="two-col">
-      <div>
-        <label>Usuario admin de Nextcloud</label>
-        <input id="nc-admin-user" type="text" placeholder="admin" autocomplete="off" autocapitalize="none">
-      </div>
-      <div>
-        <label>Contrase&ntilde;a admin de Nextcloud</label>
-        <input id="nc-admin-pass" type="password" autocomplete="current-password">
-      </div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top:1rem">
-    <h2>&#x1F465; Docentes en Nextcloud</h2>
-    <p class="card-hint">
-      Lista todos los docentes registrados en Nextcloud con el estado de su tarjeta NFC.<br>
-      Hac&eacute; clic en <b>Asignar / Cambiar tarjeta</b> para vincular o reemplazar una tarjeta.
-    </p>
-    <button class="btn btn-nc" id="load-users-btn" style="margin-top:0">&#x1F504; Cargar lista de docentes</button>
-    <div class="msg err" id="nc-users-error" style="margin-top:.75rem;display:none"></div>
-    <div id="nc-users-container" style="display:none; margin-top:1.25rem">
-      <div class="nc-summary" id="nc-users-summary"></div>
-      <div class="card-list" id="nc-users-list"></div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top:1rem">
-    <h2>&#x1F4CB; Paso 1 &mdash; Crear cuentas en Nextcloud</h2>
-    <p class="card-hint">
-      Crea las cuentas de los docentes en Nextcloud (usa las credenciales de admin ingresadas arriba).<br>
-      Formato CSV: <code style="color:#7dd3fc">usuario,contrase&ntilde;a[,nombre completo][,email]</code>
-    </p>
-    <label style="margin-top:0">Lista de docentes (CSV)</label>
-    <textarea id="nc-csv" rows="7"
-      placeholder="# usuario,contraseña,nombre completo,email (opcional)&#10;jperez,Profe2026!,Juan Pérez,jperez@colegio.edu&#10;mgarcia,Profe2026!,María García"></textarea>
-    <button class="btn btn-nc" id="nc-btn">&#x1F465; Crear cuentas en Nextcloud</button>
-    <div id="nc-results" style="display:none;margin-top:1.25rem">
-      <h2>Resultados</h2>
-      <div id="nc-list"></div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top:1rem">
-    <h2>&#x26A1; Paso 2 &mdash; Registrar tarjetas NFC en lote</h2>
-    <p class="card-hint">
-      Una vez creadas las cuentas y con los UID de las tarjetas, genera todos los tokens de una vez.<br>
-      Formato CSV: <code style="color:#7dd3fc">uid,usuario,contrase&ntilde;a[,nombre]</code>
-    </p>
-    <textarea id="bulk-csv" rows="7"
-      placeholder="# uid,usuario,contraseña,nombre (opcional)&#10;53A3A343300001,jperez,Profe2026!&#10;1234567890AB,mgarcia,Profe2026!,María García"></textarea>
-    <button class="btn btn-bulk" id="bulk-btn">&#x26A1; Registrar tarjetas y generar tokens</button>
-    <div id="bulk-results" style="display:none;margin-top:1.25rem">
-      <h2>Resultados</h2>
-      <div id="bulk-list"></div>
-    </div>
-  </div>
+  </details>
 
   <footer>La Nube NFC &mdash; v{{ version }}</footer>
 
   <script>
   "use strict";
 
+  // ── UTILITY ──
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  // ── EYE BUTTONS (event delegation, works for static + dynamic fields) ──
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.eye-btn');
+    if (!btn) return;
+    const wrap = btn.closest('.input-wrap');
+    const inp  = wrap?.querySelector('input');
+    if (!inp) return;
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.textContent = show ? '\u{1F648}' : '\u{1F441}';
+    inp.focus();
+  });
+
+  // ── FILTER TABS ──
+  let currentFilter = 'all';
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentFilter = tab.dataset.filter;
+      applyFilter();
+    });
+  });
+
+  function applyFilter() {
+    document.querySelectorAll('#nc-users-list .card-entry').forEach(entry => {
+      const hasCard = entry.dataset.hasCard === 'true';
+      let show = true;
+      if (currentFilter === 'card')    show = hasCard;
+      if (currentFilter === 'no-card') show = !hasCard;
+      entry.style.display = show ? '' : 'none';
+    });
+  }
+
+  function updateTabCounts(users) {
+    const withCard = users.filter(u => u.card).length;
+    document.getElementById('tab-all-cnt').textContent    = users.length;
+    document.getElementById('tab-nocard-cnt').textContent = users.length - withCard;
+    document.getElementById('tab-card-cnt').textContent   = withCard;
+  }
+
+  // ── LOAD DOCENTES ──
+  document.getElementById('load-users-btn').addEventListener('click', async () => {
+    const nc_admin_user = document.getElementById('nc-admin-user').value.trim();
+    const nc_admin_pass = document.getElementById('nc-admin-pass').value.trim();
+    const errEl = document.getElementById('nc-users-error');
+    errEl.className = 'msg err'; errEl.style.display = 'none';
+
+    if (!nc_admin_user || !nc_admin_pass) {
+      errEl.textContent = 'Ingres\xE1 las credenciales de admin NC.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('load-users-btn');
+    btn.disabled = true; btn.textContent = '⏳ Cargando…';
+    document.getElementById('nc-placeholder').style.display = 'none';
+    document.getElementById('nc-users-list').style.display = 'none';
+
+    try {
+      const params = new URLSearchParams({ nc_admin_user, nc_admin_pass });
+      const r      = await fetch('/admin/nc-users?' + params.toString());
+      const data   = await r.json();
+
+      if (!data.ok) {
+        errEl.textContent = '❌ ' + (data.error || 'Error al cargar');
+        errEl.style.display = 'block';
+        document.getElementById('nc-placeholder').style.display = 'block';
+      } else {
+        updateTabCounts(data.users);
+        renderNcUsers(data.users);
+        document.getElementById('nc-users-list').style.display = '';
+      }
+    } catch {
+      errEl.textContent = '❌ Error de conexi\xF3n';
+      errEl.style.display = 'block';
+      document.getElementById('nc-placeholder').style.display = 'block';
+    }
+    btn.disabled = false; btn.textContent = '\u{1F504} Cargar docentes';
+  });
+
+  // ── RENDER NC USERS ──
+  function renderNcUsers(users) {
+    const list = document.getElementById('nc-users-list');
+    list.innerHTML = '';
+
+    if (!users.length) {
+      list.innerHTML = '<p class="empty">No hay docentes en Nextcloud.</p>';
+      return;
+    }
+
+    users.sort((a, b) => {
+      if (!a.card && b.card) return -1;
+      if (a.card && !b.card) return  1;
+      return a.username.localeCompare(b.username);
+    });
+
+    for (const user of users) {
+      const hasCard   = !!user.card;
+      const hasToken  = hasCard && user.card.has_token;
+      const badgeText = hasCard ? (hasToken ? 'Token ✓' : 'Contrase\xF1a') : 'Sin tarjeta';
+      const badgeCls  = hasCard ? (hasToken ? 'token' : 'password') : 'no-card';
+      const uidLine   = hasCard ? `<div class="card-uid">${esc(user.card.uid)}</div>` : '';
+      const btnText   = hasCard ? 'Cambiar tarjeta' : 'Asignar tarjeta';
+      const dispName  = hasCard ? (user.card.name || user.username) : user.username;
+
+      const entry = document.createElement('div');
+      entry.className = 'card-entry';
+      entry.id = 'nc-entry-' + CSS.escape(user.username);
+      entry.dataset.hasCard = String(hasCard);
+
+      entry.innerHTML = `
+        <div class="card-row" data-username="${esc(user.username)}">
+          <div class="card-info">
+            <div class="card-name">${esc(dispName)}</div>
+            <div class="card-user">${esc(user.username)}</div>
+            ${uidLine}
+          </div>
+          <span class="badge ${badgeCls}">${badgeText}</span>
+          <button class="btn btn-edit nc-assign-btn" data-username="${esc(user.username)}">${btnText}</button>
+        </div>
+        <div class="edit-panel" id="nc-ep-${esc(user.username)}">
+          <label>Contrase&ntilde;a NC de <b>${esc(user.username)}</b> <small>(para token, no se guarda)</small></label>
+          <div class="input-wrap">
+            <input type="password" class="nc-ep-pass" autocomplete="current-password">
+            <button class="eye-btn" type="button">&#x1F441;</button>
+          </div>
+          <div class="uid-zone" style="margin-top:.75rem">
+            <div class="uid-label">UID de la tarjeta NFC</div>
+            <div class="nc-uid-display">&mdash; Sin escanear &mdash;</div>
+            <button class="btn btn-scan nc-scan-btn" type="button" style="margin-top:.45rem">&#x1F4C7; Escanear tarjeta</button>
+          </div>
+          <input type="text" class="nc-uid-capture" autocomplete="off">
+          <div class="edit-actions">
+            <button class="btn btn-save-ep nc-save-btn" data-username="${esc(user.username)}">Guardar</button>
+            <button class="btn btn-cancel-ep nc-cancel-btn" data-username="${esc(user.username)}">Cancelar</button>
+          </div>
+          <div class="ep-msg" id="nc-epmsg-${esc(user.username)}"></div>
+        </div>`;
+
+      entry.querySelector('.nc-assign-btn').addEventListener('click', () => {
+        const open = entry.classList.contains('editing');
+        document.querySelectorAll('#nc-users-list .card-entry.editing').forEach(el => el.classList.remove('editing'));
+        if (!open) entry.classList.add('editing');
+      });
+      entry.querySelector('.nc-cancel-btn').addEventListener('click', () => {
+        entry.classList.remove('editing');
+      });
+
+      let ncScanning = false, ncCurrentUid = '';
+      const ncScanBtn = entry.querySelector('.nc-scan-btn');
+      const ncCapture = entry.querySelector('.nc-uid-capture');
+      const ncDisplay = entry.querySelector('.nc-uid-display');
+
+      ncScanBtn.addEventListener('click', () => {
+        ncScanning = true;
+        ncScanBtn.textContent = '⏳ Acerc\xE1 la tarjeta…';
+        ncScanBtn.classList.add('scanning');
+        ncCapture.value = ''; ncCapture.focus();
+      });
+      ncCapture.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Enter' || !ncScanning) return;
+        ev.preventDefault();
+        const uid = ncCapture.value.trim(); ncCapture.value = '';
+        ncScanning = false; ncScanBtn.classList.remove('scanning');
+        if (uid.length < 4) { ncScanBtn.textContent = '\u{1F4C7} Escanear tarjeta'; return; }
+        ncCurrentUid = uid;
+        ncDisplay.textContent = uid;
+        ncDisplay.classList.add('ready');
+        ncScanBtn.textContent = '\u{1F504} Escanear otra vez';
+      });
+      ncCapture.addEventListener('blur', () => {
+        if (ncScanning) setTimeout(() => ncCapture.focus(), 0);
+      });
+
+      entry.querySelector('.nc-save-btn').addEventListener('click', async () => {
+        const pass  = entry.querySelector('.nc-ep-pass').value.trim();
+        const msgEl = document.getElementById('nc-epmsg-' + user.username);
+        if (!pass)         { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Ingres\xE1 la contrase\xF1a NC'; return; }
+        if (!ncCurrentUid) { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Escane\xE1 la tarjeta primero'; return; }
+        msgEl.style.color = '#7dd3fc'; msgEl.textContent = 'Generando token…';
+        const saveBtn = entry.querySelector('.nc-save-btn');
+        saveBtn.disabled = true;
+        try {
+          const r = await fetch('/admin/register', {
+            method: 'POST',
+            body: new URLSearchParams({ uid: ncCurrentUid, username: user.username, nc_password: pass }),
+          });
+          const data = await r.json();
+          if (data.ok) {
+            msgEl.style.color = '#86efac'; msgEl.textContent = '✅ Tarjeta asignada';
+            const row   = entry.querySelector('.card-row');
+            const badge = row.querySelector('.badge');
+            if (badge) { badge.textContent = 'Token ✓'; badge.className = 'badge token'; }
+            let uidDiv = row.querySelector('.card-uid');
+            if (!uidDiv) {
+              uidDiv = document.createElement('div');
+              uidDiv.className = 'card-uid';
+              row.querySelector('.card-info').appendChild(uidDiv);
+            }
+            uidDiv.textContent = ncCurrentUid;
+            const aBtn = row.querySelector('.nc-assign-btn');
+            if (aBtn) aBtn.textContent = 'Cambiar tarjeta';
+            entry.dataset.hasCard = 'true';
+            applyFilter();
+            appendCard(ncCurrentUid, { user: user.username, name: data.name || user.username });
+            setTimeout(() => { entry.classList.remove('editing'); msgEl.textContent = ''; }, 1500);
+          } else {
+            msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ ' + (data.error || 'Error');
+            saveBtn.disabled = false;
+          }
+        } catch {
+          msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Error de conexi\xF3n';
+          saveBtn.disabled = false;
+        }
+      });
+
+      list.appendChild(entry);
+    }
+    applyFilter();
+  }
+
+  // ── SCAN NFC (individual) ──
   const scanBtn    = document.getElementById('scan-btn');
   const uidCapture = document.getElementById('uid-capture');
   const uidDisplay = document.getElementById('uid-display');
@@ -427,7 +667,7 @@
 
   scanBtn.addEventListener('click', () => {
     scanning = true;
-    scanBtn.textContent = '⏳ Acercá la tarjeta…';
+    scanBtn.textContent = '⏳ Acerc\xE1 la tarjeta…';
     scanBtn.classList.add('scanning');
     uidCapture.value = ''; uidCapture.focus();
   });
@@ -449,8 +689,8 @@
   regBtn.addEventListener('click', async () => {
     const username    = document.getElementById('nc_user').value.trim();
     const nc_password = document.getElementById('nc_pass').value.trim();
-    if (!username || !nc_password) { showMsg('Completá usuario y contraseña NC.', 'err'); return; }
-    if (!currentUid) { showMsg('Escaneá la tarjeta primero.', 'err'); return; }
+    if (!username || !nc_password) { showMsg('Complet\xE1 usuario y contrase\xF1a NC.', 'err'); return; }
+    if (!currentUid) { showMsg('Escane\xE1 la tarjeta primero.', 'err'); return; }
     regBtn.disabled = true;
     showMsg('Generando token…', 'info');
     try {
@@ -469,9 +709,10 @@
         scanBtn.textContent = '\u{1F4C7} Escanear tarjeta';
         regBtn.disabled = true;
       } else { showMsg('❌ ' + (data.error || 'Error'), 'err'); regBtn.disabled = false; }
-    } catch { showMsg('Error de conexión.', 'err'); regBtn.disabled = false; }
+    } catch { showMsg('Error de conexi\xF3n.', 'err'); regBtn.disabled = false; }
   });
 
+  // ── APPEND CARD (local list) ──
   function appendCard(uid, data) {
     document.querySelector('#card-list .empty')?.remove();
     const entry = document.createElement('div');
@@ -490,8 +731,11 @@
       <div class="edit-panel" id="ep-${esc(uid)}">
         <label>Nombre para mostrar</label>
         <input type="text" class="ep-name" value="${esc(data.name||data.user)}" autocomplete="off">
-        <label>Contrase&ntilde;a NC para regenerar token <small>(dejar vacío para no cambiar)</small></label>
-        <input type="password" class="ep-pass" autocomplete="current-password">
+        <label>Contrase&ntilde;a NC para regenerar token <small>(dejar vac\xEDo para no cambiar)</small></label>
+        <div class="input-wrap">
+          <input type="password" class="ep-pass" autocomplete="current-password">
+          <button class="eye-btn" type="button">&#x1F441;</button>
+        </div>
         <div class="edit-actions">
           <button class="btn btn-save-ep"   data-uid="${esc(uid)}">Guardar</button>
           <button class="btn btn-cancel-ep" data-uid="${esc(uid)}">Cancelar</button>
@@ -506,14 +750,14 @@
     updateCount();
   }
 
-  document.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', openEdit));
-  document.querySelectorAll('.btn-save-ep').forEach(b => b.addEventListener('click', saveEdit));
-  document.querySelectorAll('.btn-cancel-ep').forEach(b => b.addEventListener('click', cancelEdit));
+  document.querySelectorAll('#card-list .btn-edit').forEach(b => b.addEventListener('click', openEdit));
+  document.querySelectorAll('#card-list .btn-save-ep').forEach(b => b.addEventListener('click', saveEdit));
+  document.querySelectorAll('#card-list .btn-cancel-ep').forEach(b => b.addEventListener('click', cancelEdit));
 
   function openEdit(e) {
-    const uid = e.currentTarget.dataset.uid;
+    const uid   = e.currentTarget.dataset.uid;
     const entry = document.getElementById('entry-' + uid);
-    const open = entry.classList.contains('editing');
+    const open  = entry.classList.contains('editing');
     document.querySelectorAll('#card-list .card-entry.editing').forEach(el => el.classList.remove('editing'));
     if (!open) entry.classList.add('editing');
   }
@@ -535,7 +779,7 @@
       const data = await r.json();
       if (data.ok) {
         msgEl.style.color = '#86efac'; msgEl.textContent = '✅ Guardado';
-        const row = document.querySelector(`.card-row[data-uid="${uid}"]`);
+        const row = document.querySelector(`#card-list .card-row[data-uid="${uid}"]`);
         if (row) {
           row.querySelector('.card-name').textContent = data.name || name;
           if (pass && data.has_token) {
@@ -546,20 +790,20 @@
         panel.querySelector('.ep-pass').value = '';
         setTimeout(() => { document.getElementById('entry-' + uid).classList.remove('editing'); msgEl.textContent = ''; }, 1400);
       } else { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ ' + (data.error||'Error'); }
-    } catch { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Error de conexión'; }
+    } catch { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Error de conexi\xF3n'; }
   }
 
-  document.querySelectorAll('.btn-del').forEach(b => b.addEventListener('click', deleteCard));
+  document.querySelectorAll('#card-list .btn-del').forEach(b => b.addEventListener('click', deleteCard));
   async function deleteCard(e) {
     const uid = e.currentTarget.dataset.uid;
-    if (!confirm('¿Eliminar la tarjeta ' + uid + '?')) return;
+    if (!confirm('\xBFEliminar la tarjeta ' + uid + '?')) return;
     const r = await fetch('/admin/delete', { method:'POST', body: new URLSearchParams({uid}) });
     const data = await r.json();
     if (data.ok) {
       document.getElementById('entry-' + uid)?.remove();
       updateCount();
       if (!document.querySelector('#card-list .card-row'))
-        cardList.innerHTML = '<p class="empty">No hay tarjetas registradas todavía.</p>';
+        cardList.innerHTML = '<p class="empty">No hay tarjetas registradas todav\xEDa.</p>';
     } else { alert('Error: ' + (data.error||'desconocido')); }
   }
 
@@ -567,173 +811,41 @@
     countEl.textContent = '(' + document.querySelectorAll('#card-list .card-row').length + ')';
   }
 
-  document.getElementById('load-users-btn').addEventListener('click', async () => {
-    const nc_admin_user = document.getElementById('nc-admin-user').value.trim();
-    const nc_admin_pass = document.getElementById('nc-admin-pass').value.trim();
-    const errEl         = document.getElementById('nc-users-error');
-    const container     = document.getElementById('nc-users-container');
-    errEl.style.display = 'none';
-    if (!nc_admin_user || !nc_admin_pass) {
-      errEl.textContent = 'Ingresá las credenciales de admin NC arriba.';
-      errEl.style.display = 'block'; return;
-    }
-    const btn = document.getElementById('load-users-btn');
-    btn.disabled = true; btn.textContent = '⏳ Cargando…';
-    container.style.display = 'none';
-    try {
-      const params = new URLSearchParams({ nc_admin_user, nc_admin_pass });
-      const r      = await fetch('/admin/nc-users?' + params.toString());
-      const data   = await r.json();
-      if (!data.ok) {
-        errEl.textContent = '❌ ' + (data.error || 'Error al cargar');
-        errEl.style.display = 'block';
-      } else {
-        const withCard    = data.users.filter(u => u.card).length;
-        const withoutCard = data.total - withCard;
-        const sumEl = document.getElementById('nc-users-summary');
-        sumEl.innerHTML =
-          `<span>&#x1F465; ${data.total} docentes</span>` +
-          `<span style="color:#86efac">&#x2713; ${withCard} con tarjeta</span>` +
-          `<span style="color:#94a3b8">&#x25CB; ${withoutCard} sin tarjeta</span>`;
-        renderNcUsers(data.users);
-        container.style.display = 'block';
-      }
-    } catch(e) {
-      errEl.textContent = '❌ Error de conexión'; errEl.style.display = 'block';
-    }
-    btn.disabled = false; btn.textContent = '\u{1F504} Cargar lista de docentes';
-  });
-
-  function renderNcUsers(users) {
-    const list = document.getElementById('nc-users-list');
-    list.innerHTML = '';
-    if (!users.length) { list.innerHTML = '<p class="empty">No hay docentes en Nextcloud.</p>'; return; }
-    users.sort((a, b) => {
-      if (!a.card && b.card) return -1;
-      if (a.card && !b.card) return  1;
-      return a.username.localeCompare(b.username);
-    });
-    for (const user of users) {
-      const entry = document.createElement('div');
-      entry.className = 'card-entry';
-      entry.id = 'nc-entry-' + CSS.escape(user.username);
-      const hasCard   = !!user.card;
-      const hasToken  = hasCard && user.card.has_token;
-      const badgeText = hasCard ? (hasToken ? 'Token ✓' : 'Contraseña') : 'Sin tarjeta';
-      const badgeCls  = hasCard ? (hasToken ? 'token' : 'password') : 'no-card';
-      const uidLine   = hasCard ? `<div class="card-uid">${esc(user.card.uid)}</div>` : '';
-      const btnText   = hasCard ? 'Cambiar tarjeta' : 'Asignar tarjeta';
-      const dispName  = hasCard ? (user.card.name || user.username) : user.username;
-      entry.innerHTML = `
-        <div class="card-row" data-username="${esc(user.username)}">
-          <div class="card-info">
-            <div class="card-name">${esc(dispName)}</div>
-            <div class="card-user">${esc(user.username)}</div>
-            ${uidLine}
-          </div>
-          <span class="badge ${badgeCls}">${badgeText}</span>
-          <button class="btn btn-edit nc-assign-btn" data-username="${esc(user.username)}">${btnText}</button>
-        </div>
-        <div class="edit-panel" id="nc-ep-${esc(user.username)}">
-          <label>Contrase&ntilde;a NC de <b>${esc(user.username)}</b> <small>(para generar token, no se guarda)</small></label>
-          <input type="password" class="nc-ep-pass" autocomplete="current-password">
-          <div class="uid-zone" style="margin-top:.75rem">
-            <div class="uid-label">UID de la tarjeta NFC</div>
-            <div class="nc-uid-display">— Sin escanear —</div>
-            <button class="btn btn-scan nc-scan-btn" type="button" style="margin-top:.5rem">&#x1F4C7; Escanear tarjeta</button>
-          </div>
-          <input type="text" class="nc-uid-capture" autocomplete="off">
-          <div class="edit-actions">
-            <button class="btn btn-save-ep nc-save-btn" data-username="${esc(user.username)}">Guardar</button>
-            <button class="btn btn-cancel-ep nc-cancel-btn" data-username="${esc(user.username)}">Cancelar</button>
-          </div>
-          <div class="ep-msg" id="nc-epmsg-${esc(user.username)}"></div>
-        </div>`;
-      entry.querySelector('.nc-assign-btn').addEventListener('click', () => {
-        const open = entry.classList.contains('editing');
-        document.querySelectorAll('#nc-users-list .card-entry.editing').forEach(el => el.classList.remove('editing'));
-        if (!open) entry.classList.add('editing');
-      });
-      entry.querySelector('.nc-cancel-btn').addEventListener('click', () => { entry.classList.remove('editing'); });
-      let ncScanning = false, ncCurrentUid = '';
-      const ncScanBtn = entry.querySelector('.nc-scan-btn');
-      const ncCapture = entry.querySelector('.nc-uid-capture');
-      const ncDisplay = entry.querySelector('.nc-uid-display');
-      ncScanBtn.addEventListener('click', () => {
-        ncScanning = true;
-        ncScanBtn.textContent = '⏳ Acercá la tarjeta…';
-        ncScanBtn.classList.add('scanning');
-        ncCapture.value = ''; ncCapture.focus();
-      });
-      ncCapture.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' || !ncScanning) return;
-        e.preventDefault();
-        const uid = ncCapture.value.trim(); ncCapture.value = '';
-        ncScanning = false; ncScanBtn.classList.remove('scanning');
-        if (uid.length < 4) { ncScanBtn.textContent = '\u{1F4C7} Escanear tarjeta'; return; }
-        ncCurrentUid = uid; ncDisplay.textContent = uid;
-        ncDisplay.classList.add('ready'); ncScanBtn.textContent = '\u{1F504} Escanear otra vez';
-      });
-      ncCapture.addEventListener('blur', () => { if (ncScanning) setTimeout(() => ncCapture.focus(), 0); });
-      entry.querySelector('.nc-save-btn').addEventListener('click', async () => {
-        const pass  = entry.querySelector('.nc-ep-pass').value.trim();
-        const msgEl = document.getElementById('nc-epmsg-' + user.username);
-        if (!pass) { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Ingresá la contraseña NC del docente'; return; }
-        if (!ncCurrentUid) { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Escaneá la tarjeta primero'; return; }
-        msgEl.style.color = '#7dd3fc'; msgEl.textContent = 'Generando token…';
-        const saveBtn = entry.querySelector('.nc-save-btn'); saveBtn.disabled = true;
-        try {
-          const r = await fetch('/admin/register', {
-            method: 'POST',
-            body: new URLSearchParams({ uid: ncCurrentUid, username: user.username, nc_password: pass }),
-          });
-          const data = await r.json();
-          if (data.ok) {
-            msgEl.style.color = '#86efac'; msgEl.textContent = '✅ Tarjeta asignada';
-            const row = entry.querySelector('.card-row');
-            const badge = row.querySelector('.badge');
-            if (badge) { badge.textContent = 'Token ✓'; badge.className = 'badge token'; }
-            let uidDiv = row.querySelector('.card-uid');
-            if (!uidDiv) { uidDiv = document.createElement('div'); uidDiv.className = 'card-uid'; row.querySelector('.card-info').appendChild(uidDiv); }
-            uidDiv.textContent = ncCurrentUid;
-            const aBtn = row.querySelector('.nc-assign-btn');
-            if (aBtn) aBtn.textContent = 'Cambiar tarjeta';
-            appendCard(ncCurrentUid, { user: user.username, name: data.name || user.username });
-            setTimeout(() => { entry.classList.remove('editing'); msgEl.textContent = ''; }, 1500);
-          } else { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ ' + (data.error || 'Error'); saveBtn.disabled = false; }
-        } catch { msgEl.style.color = '#fca5a5'; msgEl.textContent = '❌ Error de conexión'; saveBtn.disabled = false; }
-      });
-      list.appendChild(entry);
-    }
-  }
-
+  // ── CREAR CUENTAS NC ──
   document.getElementById('nc-btn').addEventListener('click', async () => {
     const nc_admin_user = document.getElementById('nc-admin-user').value.trim();
     const nc_admin_pass = document.getElementById('nc-admin-pass').value.trim();
     const nc_csv        = document.getElementById('nc-csv').value.trim();
-    if (!nc_admin_user || !nc_admin_pass) { alert('Ingresá las credenciales de admin NC arriba.'); return; }
-    if (!nc_csv) { alert('Pegá el CSV primero.'); return; }
+    if (!nc_admin_user || !nc_admin_pass) { alert('Ingres\xE1 las credenciales de admin NC arriba.'); return; }
+    if (!nc_csv) { alert('Peg\xE1 el CSV primero.'); return; }
     const btn = document.getElementById('nc-btn');
     btn.disabled = true; btn.textContent = '⏳ Creando cuentas…';
     document.getElementById('nc-results').style.display = 'none';
     try {
-      const r    = await fetch('/admin/create-nc-users', { method: 'POST', body: new URLSearchParams({ nc_admin_user, nc_admin_pass, nc_csv }) });
+      const r    = await fetch('/admin/create-nc-users', {
+        method: 'POST',
+        body: new URLSearchParams({ nc_admin_user, nc_admin_pass, nc_csv }),
+      });
       const data = await r.json();
       const list = document.getElementById('nc-list');
       list.innerHTML = data.results.map(row => {
-        const icon = row.ok ? '✅' : '❌'; const info = row.ok ? 'Cuenta creada' : (row.error||'Error'); const color = row.ok ? '#86efac' : '#fca5a5';
+        const icon  = row.ok ? '✅' : '❌';
+        const info  = row.ok ? 'Cuenta creada' : (row.error||'Error');
+        const color = row.ok ? '#86efac' : '#fca5a5';
         return `<div class="bulk-row" style="color:${color}">${icon} <b>${esc(row.user||'?')}</b> &mdash; ${esc(info)}</div>`;
       }).join('');
-      const ok = data.created || 0; const tot = data.total || 0; const col = ok === tot ? '#86efac' : '#fbbf24';
-      list.insertAdjacentHTML('beforeend', `<div class="bulk-summary" style="color:${col}">${ok} / ${tot} cuentas creadas.</div>`);
+      const ok  = data.created || 0, tot = data.total || 0;
+      list.insertAdjacentHTML('beforeend',
+        `<div class="bulk-summary" style="color:${ok===tot?'#86efac':'#fbbf24'}">${ok} / ${tot} cuentas creadas.</div>`);
       document.getElementById('nc-results').style.display = 'block';
-    } catch (e) { alert('Error de conexión: ' + e); }
+    } catch (err) { alert('Error: ' + err); }
     btn.disabled = false; btn.textContent = '\u{1F465} Crear cuentas en Nextcloud';
   });
 
+  // ── BULK NFC ──
   document.getElementById('bulk-btn').addEventListener('click', async () => {
     const csv_data = document.getElementById('bulk-csv').value.trim();
-    if (!csv_data) { alert('Pegá el CSV primero.'); return; }
+    if (!csv_data) { alert('Peg\xE1 el CSV primero.'); return; }
     const btn = document.getElementById('bulk-btn');
     btn.disabled = true; btn.textContent = '⏳ Procesando…';
     document.getElementById('bulk-results').style.display = 'none';
@@ -742,15 +854,18 @@
       const data = await r.json();
       const list = document.getElementById('bulk-list');
       list.innerHTML = data.results.map(row => {
-        const icon = row.ok ? '✅' : '❌'; const info = row.ok ? 'Token generado' : (row.error||'Error'); const color = row.ok ? '#86efac' : '#fca5a5';
-        return `<div class="bulk-row" style="color:${color}">${icon} <b>${esc(row.uid||'?')}</b> · ${esc(row.user||row.line||'?')} &mdash; ${esc(info)}</div>`;
+        const icon  = row.ok ? '✅' : '❌';
+        const info  = row.ok ? 'Token generado' : (row.error||'Error');
+        const color = row.ok ? '#86efac' : '#fca5a5';
+        return `<div class="bulk-row" style="color:${color}">${icon} <b>${esc(row.uid||'?')}</b> \xB7 ${esc(row.user||row.line||'?')} &mdash; ${esc(info)}</div>`;
       }).join('');
-      const ok = data.registered || 0; const tot = data.total || 0; const col = ok === tot ? '#86efac' : '#fbbf24';
-      list.insertAdjacentHTML('beforeend', `<div class="bulk-summary" style="color:${col}">${ok} / ${tot} tarjetas registradas.</div>`);
+      const ok  = data.registered || 0, tot = data.total || 0;
+      list.insertAdjacentHTML('beforeend',
+        `<div class="bulk-summary" style="color:${ok===tot?'#86efac':'#fbbf24'}">${ok} / ${tot} tarjetas registradas.</div>`);
       document.getElementById('bulk-results').style.display = 'block';
       if (ok > 0) setTimeout(() => location.reload(), 2000);
-    } catch (e) { alert('Error: ' + e); }
-    btn.disabled = false; btn.textContent = '⚡ Registrar tarjetas y generar tokens';
+    } catch (err) { alert('Error: ' + err); }
+    btn.disabled = false; btn.textContent = '⚡ Registrar tarjetas en lote';
   });
   </script>
 {% endif %}
