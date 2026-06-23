@@ -232,7 +232,7 @@
     function refocus() {
       if (document.activeElement !== catcher) catcher.focus();
     }
-    setInterval(refocus, 400);
+    setInterval(refocus, 100);
     document.addEventListener('click', e => {
       if (!e.target.closest('a, button')) refocus();
     });
@@ -270,6 +270,8 @@
       setTimeout(() => {
         setStatus('Acercá tu tarjeta para ingresar');
         uidEl.textContent = '';
+        catcher.value = '';
+        catcher.focus();
       }, 4000);
     }
 
@@ -302,7 +304,7 @@
       const nfcBtn = document.createElement('button');
       nfcBtn.className = 'btn btn-outline';
       nfcBtn.style.cssText = 'width:100%;font-size:.82rem;padding:.55rem 1rem';
-      nfcBtn.textContent = '📱 Activar NFC (Android)';
+      nfcBtn.textContent = '📦 Activar NFC (Android)';
       nfcWrap.appendChild(nfcBtn);
       document.querySelector('.actions').after(nfcWrap);
 

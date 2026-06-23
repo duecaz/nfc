@@ -18,6 +18,8 @@ public class MainActivity : Activity
     private WebView webView = null!;
     private NfcAdapter? nfcAdapter;
     private IValueCallback? filePathCallback;
+    private DownloadReceiver? _downloadReceiver;
+    private readonly System.Collections.Generic.HashSet<long> _activeDownloads = new();
 
     private const string KioskUrl = "https://lanube.uno";
     private const string LogTag = "LaNubeKiosk";
@@ -50,7 +52,21 @@ public class MainActivity : Activity
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
         Android.Util.Log.Debug(LogTag, $"Iniciado. NFC: {(nfcAdapter != null ? "OK" : "NO")}");
+
+        _downloadReceiver = new DownloadReceiver(this);
+        RegisterReceiver(_downloadReceiver, new IntentFilter(DownloadManager.ActionDownloadComplete));
+
         HideSystemUI();
+    }
+
+    protected override void OnDestroy()
+    {
+        base.OnDestroy();
+        if (_downloadReceiver != null)
+        {
+            UnregisterReceiver(_downloadReceiver);
+            _downloadReceiver = null;
+        }
     }
 
     public override void OnWindowFocusChanged(bool hasFocus)
@@ -141,6 +157,58 @@ public class MainActivity : Activity
         if (webView.CanGoBack()) webView.GoBack();
     }
 
+    // ---- Apertura automática al terminar la descarga ----
+    private class DownloadReceiver : BroadcastReceiver
+    {
+        private readonly MainActivity _host;
+        public DownloadReceiver(MainActivity host) => _host = host;
+
+        public override void OnReceive(Context? context, Intent? intent)
+        {
+            var id = intent?.GetLongExtra(DownloadManager.ExtraDownloadId, -1) ?? -1;
+            if (id == -1 || !_host._activeDownloads.Remove(id)) return;
+
+            var dm = (DownloadManager?)_host.GetSystemService(DownloadService);
+            if (dm == null) return;
+
+            var query = new DownloadManager.Query();
+            query.SetFilterById(id);
+            var cursor = dm.InvokeQuery(query);
+            if (cursor == null || !cursor.MoveToFirst()) { cursor?.Close(); return; }
+
+            var statusIdx = cursor.GetColumnIndex(DownloadManager.ColumnStatus);
+            var status    = (DownloadStatus)cursor.GetInt(statusIdx);
+            var uriIdx    = cursor.GetColumnIndex(DownloadManager.ColumnLocalUri);
+            var localUri  = cursor.GetString(uriIdx);
+            cursor.Close();
+
+            if (status != DownloadStatus.Successful || localUri == null) return;
+            try
+            {
+                var fileUri = Android.Net.Uri.Parse(localUri);
+                var ext  = MimeTypeMap.GetFileExtensionFromUrl(localUri)?.ToLower() ?? "";
+                var mime = MimeTypeMap.Singleton?.GetMimeTypeFromExtension(ext) ?? "*/*";
+
+                var openIntent = new Intent(Intent.ActionView)
+                    .SetDataAndType(fileUri, mime)
+                    .SetFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
+                _host.StartActivity(openIntent);
+                Android.Util.Log.Debug(LogTag, $"Abriendo: {localUri} ({mime})");
+            }
+            catch (Exception ex)
+            {
+                Android.Util.Log.Error(LogTag, $"Open file error: {ex.Message}");
+                try
+                {
+                    _host.StartActivity(
+                        new Intent(DownloadManager.ActionViewDownloads)
+                            .SetFlags(ActivityFlags.NewTask));
+                }
+                catch { }
+            }
+        }
+    }
+
     // ---- Descarga de archivos con cookies de sesión ----
     private class KioskDownloadListener : Java.Lang.Object, IDownloadListener
     {
@@ -168,13 +236,14 @@ public class MainActivity : Activity
                     Android.OS.Environment.DirectoryDownloads, fileName);
 
                 var dm = (DownloadManager?)_host.GetSystemService(DownloadService);
-                dm?.Enqueue(req);
+                var downloadId = dm?.Enqueue(req) ?? -1;
+                if (downloadId > 0) _host._activeDownloads.Add(downloadId);
 
                 Android.Widget.Toast.MakeText(
                     _host, $"Descargando {fileName}…",
                     Android.Widget.ToastLength.Long)?.Show();
 
-                Android.Util.Log.Debug(LogTag, $"Download: {fileName}");
+                Android.Util.Log.Debug(LogTag, $"Download: {fileName} (id={downloadId})");
             }
             catch (Exception ex)
             {
@@ -205,12 +274,16 @@ public class MainActivity : Activity
         {
             base.OnPageFinished(view, url);
 
+            // Foco inmediato en el catcher NFC (solo existe en la página del kiosko)
+            view?.EvaluateJavascript("document.getElementById('catcher')?.focus()", null);
+
             // Rechazar silenciosamente el permiso de notificaciones de NC
             view?.EvaluateJavascript(
                 "(function(){" +
                 "if('Notification' in window){" +
                 "try{Object.defineProperty(Notification,'permission',{get:()=>'denied',configurable:true});}catch(e){}" +
-                "Notification.requestPermission=function(){return Promise.resolve('denied');};}" +
+                "Notification.requestPermission=function(){return Promise.resolve('denied');};" +
+                "}" +
                 "})()", null);
 
             // Al volver al kiosko (fin de sesión): limpiar caché HTTP e historial

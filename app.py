@@ -26,7 +26,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "9"
+VERSION              = "10"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -777,7 +777,7 @@ def admin_nc_users():
         if u:
             by_username[u] = {
                 "uid": uid,
-                "has_token": bool(info.get("token")),
+                "has_token": bool(info.get("token"")),
                 "name": info.get("name", u),
             }
 
