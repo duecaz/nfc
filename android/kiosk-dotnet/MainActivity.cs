@@ -5,7 +5,6 @@ using Android.Nfc;
 using Android.OS;
 using Android.Views;
 using Android.Webkit;
-using Android.Widget;
 
 namespace LaNubeKiosk;
 
@@ -18,14 +17,15 @@ public class MainActivity : Activity
 {
     private WebView webView = null!;
     private NfcAdapter? nfcAdapter;
+    private IValueCallback? filePathCallback;
+
     private const string KioskUrl = "https://lanube.uno";
     private const string LogTag = "LaNubeKiosk";
+    private const int FileChooserCode = 1001;
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
-
-        // Pantalla siempre encendida
         Window!.AddFlags(WindowManagerFlags.KeepScreenOn);
 
         webView = new WebView(this);
@@ -42,12 +42,11 @@ public class MainActivity : Activity
         webView.Settings.UseWideViewPort = true;
         webView.Settings.LoadWithOverviewMode = true;
         webView.SetWebViewClient(new KioskWebViewClient(this));
-        webView.SetWebChromeClient(new WebChromeClient());
+        webView.SetWebChromeClient(new KioskWebChromeClient(this));
         webView.LoadUrl(KioskUrl);
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
         Android.Util.Log.Debug(LogTag, $"Iniciado. NFC: {(nfcAdapter != null ? "OK" : "NO")}");
-
         HideSystemUI();
     }
 
@@ -118,23 +117,71 @@ public class MainActivity : Activity
         }
     }
 
+    // Resultado del selector de archivos
+    protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
+    {
+        base.OnActivityResult(requestCode, resultCode, data);
+        if (requestCode != FileChooserCode)
+        {
+            filePathCallback?.OnReceiveValue(null);
+            filePathCallback = null;
+            return;
+        }
+        Android.Net.Uri[]? results = null;
+        if (resultCode == Result.Ok && data?.Data != null)
+            results = new[] { data.Data };
+        filePathCallback?.OnReceiveValue(results);
+        filePathCallback = null;
+    }
+
     public override void OnBackPressed()
     {
         if (webView.CanGoBack()) webView.GoBack();
     }
 
-    // Recarga automatica si hay error de red
+    // Recarga si hay error de red
     private class KioskWebViewClient : WebViewClient
     {
         private readonly MainActivity _host;
-        public KioskWebViewClient(MainActivity host) { _host = host; }
+        public KioskWebViewClient(MainActivity host) => _host = host;
 
         public override void OnReceivedError(WebView? view, IWebResourceRequest? request, WebResourceError? error)
         {
             if (request?.IsForMainFrame != true) return;
-            Android.Util.Log.Warn(LogTag, $"Error carga: {error?.Description}");
-            // Reintenta en 5 segundos
+            Android.Util.Log.Warn(LogTag, $"Error red: {error?.Description}");
             view?.PostDelayed(() => view.LoadUrl(KioskUrl), 5000);
+        }
+    }
+
+    // Selector de archivos para subidas en Nextcloud
+    private class KioskWebChromeClient : WebChromeClient
+    {
+        private readonly MainActivity _host;
+        public KioskWebChromeClient(MainActivity host) => _host = host;
+
+        public override bool OnShowFileChooser(
+            WebView? webView,
+            IValueCallback? filePathCallback,
+            FileChooserParams? fileChooserParams)
+        {
+            // Cancelar callback anterior si quedó pendiente
+            _host.filePathCallback?.OnReceiveValue(null);
+            _host.filePathCallback = filePathCallback;
+            try
+            {
+                var intent = fileChooserParams?.CreateIntent()
+                    ?? new Intent(Intent.ActionOpenDocument).SetType("*/*");
+                _host.StartActivityForResult(
+                    Intent.CreateChooser(intent, "Seleccionar archivo"),
+                    FileChooserCode);
+            }
+            catch (Exception ex)
+            {
+                Android.Util.Log.Error(LogTag, $"FileChooser error: {ex.Message}");
+                _host.filePathCallback?.OnReceiveValue(null);
+                _host.filePathCallback = null;
+            }
+            return true;
         }
     }
 }
