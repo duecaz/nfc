@@ -45,7 +45,10 @@ public class MainActivity : Activity
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
         if (nfcAdapter == null)
-            Toast.MakeText(this, "NFC no disponible en este dispositivo", ToastLength.Long)!.Show();
+            Toast.MakeText(this, "NFC no disponible", ToastLength.Long)!.Show();
+
+        // Confirm new version is running
+        Toast.MakeText(this, "La Nube Kiosk v3 ✓", ToastLength.Short)!.Show();
 
         HideSystemUI();
     }
@@ -96,14 +99,22 @@ public class MainActivity : Activity
 #pragma warning disable CS0618
         var tag = intent.GetParcelableExtra(NfcAdapter.ExtraTag) as Tag;
 #pragma warning restore CS0618
-        if (tag?.GetId() is byte[] id)
-        {
-            // Android returns bytes in reversed nibble-swapped order vs Windows USB readers.
-            // Reverse byte order then swap nibbles in each byte to match users.json format.
-            Array.Reverse(id);
-            var uid = string.Concat(id.Select(b => $"{(b & 0x0F):X1}{(b >> 4):X1}"));
-            webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null);
-        }
+        if (tag?.GetId() is not byte[] id) return;
+
+        // Raw bytes as Android delivers them
+        var raw = BitConverter.ToString(id).Replace("-", "");
+
+        // Reverse byte order + swap nibbles to match Windows USB reader format
+        Array.Reverse(id);
+        var sb = new System.Text.StringBuilder();
+        foreach (var b in id)
+            sb.Append(((b & 0x0F) << 4 | (b >> 4)).ToString("X2"));
+        var uid = sb.ToString();
+
+        // DEBUG: show both values as Toast — remove after confirmed working
+        Toast.MakeText(this, $"RAW: {raw}\nUID enviado: {uid}", ToastLength.Long)!.Show();
+
+        webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null);
     }
 
     public override void OnBackPressed()
