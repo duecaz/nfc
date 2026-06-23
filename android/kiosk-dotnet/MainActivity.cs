@@ -20,6 +20,7 @@ public class MainActivity : Activity
     private NfcAdapter? nfcAdapter;
 
     private const string KioskUrl = "https://lanube.uno";
+    private const string Version = "v4-debug";
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
@@ -29,8 +30,8 @@ public class MainActivity : Activity
         webView = new WebView(this);
         SetContentView(webView);
 
-        CookieManager.Instance!.SetAcceptCookie(true);
-        CookieManager.Instance.SetAcceptThirdPartyCookies(webView, true);
+        CookieManager.Instance?.SetAcceptCookie(true);
+        CookieManager.Instance?.SetAcceptThirdPartyCookies(webView, true);
 
         webView.Settings!.JavaScriptEnabled = true;
         webView.Settings.DomStorageEnabled = true;
@@ -44,11 +45,14 @@ public class MainActivity : Activity
         webView.LoadUrl(KioskUrl);
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
-        if (nfcAdapter == null)
-            Toast.MakeText(this, "NFC no disponible", ToastLength.Long)!.Show();
+        var nfcStatus = nfcAdapter != null ? "NFC OK" : "NFC NO DISPONIBLE";
 
-        // Confirm new version is running
-        Toast.MakeText(this, "La Nube Kiosk v3 ✓", ToastLength.Short)!.Show();
+        // Dialog that MUST be dismissed — confirms version is installed
+        new AlertDialog.Builder(this)!
+            .SetTitle($"La Nube Kiosk {Version}")!
+            .SetMessage($"{nfcStatus}\nAceptá y acercá la tarjeta.")!
+            .SetPositiveButton("OK", (s, e) => { })!
+            .Show();
 
         HideSystemUI();
     }
@@ -78,9 +82,11 @@ public class MainActivity : Activity
         if (nfcAdapter == null) return;
         var intent = new Intent(this, typeof(MainActivity));
         intent.AddFlags(ActivityFlags.SingleTop);
+#pragma warning disable CA1416
         var flags = Build.VERSION.SdkInt >= BuildVersionCodes.S
             ? PendingIntentFlags.Mutable
             : (PendingIntentFlags)0;
+#pragma warning restore CA1416
         var pending = PendingIntent.GetActivity(this, 0, intent, flags);
         nfcAdapter.EnableForegroundDispatch(this, pending, null, null);
     }
@@ -96,31 +102,34 @@ public class MainActivity : Activity
         base.OnNewIntent(intent);
         if (intent == null) return;
 
-#pragma warning disable CS0618
+#pragma warning disable CA1422
         var tag = intent.GetParcelableExtra(NfcAdapter.ExtraTag) as Tag;
-#pragma warning restore CS0618
+#pragma warning restore CA1422
         if (tag?.GetId() is not byte[] id) return;
 
-        // Raw bytes as Android delivers them
         var raw = BitConverter.ToString(id).Replace("-", "");
 
-        // Reverse byte order + swap nibbles to match Windows USB reader format
         Array.Reverse(id);
         var sb = new System.Text.StringBuilder();
         foreach (var b in id)
             sb.Append(((b & 0x0F) << 4 | (b >> 4)).ToString("X2"));
         var uid = sb.ToString();
 
-        // DEBUG: show both values as Toast — remove after confirmed working
-        Toast.MakeText(this, $"RAW: {raw}\nUID enviado: {uid}", ToastLength.Long)!.Show();
-
-        webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null);
+        // Show both values — user MUST tap OK to dismiss
+        new AlertDialog.Builder(this)!
+            .SetTitle("Tarjeta detectada")!
+            .SetMessage($"RAW (Android):\n{raw}\n\nUID a enviar al servidor:\n{uid}\n\n¿UID coincide con Windows?")!
+            .SetPositiveButton("Sí, autenticar", (s, e) =>
+            {
+                webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null);
+            })!
+            .SetNegativeButton("Cancelar", (s, e) => { })!
+            .Show();
     }
 
     public override void OnBackPressed()
     {
         if (webView.CanGoBack())
             webView.GoBack();
-        // Blocks app exit intentionally for kiosk use
     }
 }
