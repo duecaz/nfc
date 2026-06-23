@@ -23,7 +23,7 @@ public class MainActivity : Activity
 
     private const string KioskUrl   = "https://lanube.uno";
     private const string LogTag     = "LaNubeKiosk";
-    private const string ApkVersion = "2";          // incrementar con cada build
+    private const string ApkVersion = "3";
     private const int    FileChooserCode = 1001;
 
     protected override void OnCreate(Bundle? savedInstanceState)
@@ -54,7 +54,6 @@ public class MainActivity : Activity
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
         Android.Util.Log.Debug(LogTag, $"APK v{ApkVersion} iniciado. NFC: {(nfcAdapter != null ? "OK" : "NO")}");
 
-        // Android 13+ exige indicar si el receiver acepta broadcasts de otras apps
         _downloadReceiver = new DownloadReceiver(this);
         var dlFilter = new IntentFilter(DownloadManager.ActionDownloadComplete);
 #pragma warning disable CA1416
@@ -185,25 +184,25 @@ public class MainActivity : Activity
             if (cursor == null || !cursor.MoveToFirst()) { cursor?.Close(); return; }
 
             var statusIdx = cursor.GetColumnIndex(DownloadManager.ColumnStatus);
-            var uriIdx    = cursor.GetColumnIndex(DownloadManager.ColumnLocalUri);
-            // "media_type" es la columna donde DownloadManager guarda el MIME
-            // que se pasó con SetMimeType() al encolar la descarga
             var mimeIdx   = cursor.GetColumnIndex("media_type");
-
-            var status   = (DownloadStatus)cursor.GetInt(statusIdx);
-            var localUri = cursor.GetString(uriIdx);
-            var mime     = (mimeIdx >= 0 ? cursor.GetString(mimeIdx) : null) ?? "*/*";
+            var status    = (DownloadStatus)cursor.GetInt(statusIdx);
+            var mime      = (mimeIdx >= 0 ? cursor.GetString(mimeIdx) : null) ?? "*/*";
             cursor.Close();
 
-            if (status != DownloadStatus.Successful || localUri == null) return;
+            if (status != DownloadStatus.Successful) return;
             try
             {
-                var fileUri = Android.Net.Uri.Parse(localUri);
+                // file:// lanza FileUriExposedException en Android 7+.
+                // El ContentProvider del DownloadManager expone content://downloads/public_downloads/{id},
+                // que ya lleva los permisos de lectura incorporados.
+                var downloadUri = ContentUris.WithAppendedId(
+                    Android.Net.Uri.Parse("content://downloads/public_downloads"), id);
+
                 var openIntent = new Intent(Intent.ActionView)
-                    .SetDataAndType(fileUri, mime)
+                    .SetDataAndType(downloadUri, mime)
                     .SetFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
                 _host.StartActivity(openIntent);
-                Android.Util.Log.Debug(LogTag, $"Abriendo: {localUri} ({mime})");
+                Android.Util.Log.Debug(LogTag, $"Abriendo descarga id={id} ({mime})");
             }
             catch (Exception ex)
             {
@@ -236,7 +235,7 @@ public class MainActivity : Activity
                 var cookies  = CookieManager.Instance?.GetCookie(url) ?? "";
 
                 var req = new DownloadManager.Request(Android.Net.Uri.Parse(url));
-                req.SetMimeType(mimetype);   // guardado en columna media_type
+                req.SetMimeType(mimetype);
                 req.AddRequestHeader("Cookie", cookies);
                 req.AddRequestHeader("User-Agent", userAgent);
                 req.SetTitle(fileName);
@@ -284,26 +283,21 @@ public class MainActivity : Activity
         {
             base.OnPageFinished(view, url);
 
-            // Foco inmediato en el catcher NFC (solo existe en la página del kiosko)
             view?.EvaluateJavascript("document.getElementById('catcher')?.focus()", null);
 
-            // Rechazar silenciosamente el permiso de notificaciones de NC
             view?.EvaluateJavascript(
                 "(function(){if('Notification' in window){" +
                 "try{Object.defineProperty(Notification,'permission',{get:()=>'denied',configurable:true});}catch(e){}" +
                 "Notification.requestPermission=function(){return Promise.resolve('denied');};}})()", null);
 
-            bool isHome = url == KioskUrl || url == KioskUrl + "/";
-            if (isHome)
+            if (url == KioskUrl || url == KioskUrl + "/")
             {
-                // Inyectar versión de APK en la esquina inferior izquierda
                 view?.EvaluateJavascript(
                     "(function(){var e=document.getElementById('_apkv');" +
                     "if(!e){e=document.createElement('span');e.id='_apkv';" +
                     "e.style.cssText='position:fixed;bottom:.5rem;left:3.6rem;font-size:.6rem;color:#d1d5db;pointer-events:none';" +
                     $"document.body.appendChild(e);}}e.textContent='apk v{ApkVersion}';}})();", null);
 
-                // Limpiar caché HTTP e historial al volver al kiosko (fin de sesión)
                 view?.ClearCache(true);
                 view?.ClearHistory();
                 Android.Util.Log.Debug(LogTag, "Sesión cerrada: caché e historial limpiados");
