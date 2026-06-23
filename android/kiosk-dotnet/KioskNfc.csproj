@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Xamarin.AndroidX.Core" Version="1.13.1.6" />
+    <PackageReference Include="Xamarin.AndroidX.Core" Version="1.15.0" />
   </ItemGroup>
 
 </Project>
