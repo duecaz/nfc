@@ -98,7 +98,10 @@ public class MainActivity : Activity
 #pragma warning restore CS0618
         if (tag?.GetId() is byte[] id)
         {
-            var uid = BitConverter.ToString(id).Replace("-", "");
+            // Android returns bytes in reversed nibble-swapped order vs Windows USB readers.
+            // Reverse byte order then swap nibbles in each byte to match users.json format.
+            Array.Reverse(id);
+            var uid = string.Concat(id.Select(b => $"{(b & 0x0F):X1}{(b >> 4):X1}"));
             webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null);
         }
     }
