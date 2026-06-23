@@ -53,8 +53,15 @@ public class MainActivity : Activity
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
         Android.Util.Log.Debug(LogTag, $"Iniciado. NFC: {(nfcAdapter != null ? "OK" : "NO")}");
 
+        // Android 13+ exige indicar si el receiver acepta broadcasts de otras apps
         _downloadReceiver = new DownloadReceiver(this);
-        RegisterReceiver(_downloadReceiver, new IntentFilter(DownloadManager.ActionDownloadComplete));
+        var dlFilter = new IntentFilter(DownloadManager.ActionDownloadComplete);
+#pragma warning disable CA1416
+        if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu)
+            RegisterReceiver(_downloadReceiver, dlFilter, ReceiverFlags.Exported);
+        else
+            RegisterReceiver(_downloadReceiver, dlFilter);
+#pragma warning restore CA1416
 
         HideSystemUI();
     }
@@ -299,7 +306,9 @@ public class MainActivity : Activity
             WebView? view, IWebResourceRequest? request, WebResourceError? error)
         {
             if (request?.IsForMainFrame != true) return;
+#pragma warning disable CA1416
             Android.Util.Log.Warn(LogTag, $"Error red: {error?.Description}");
+#pragma warning restore CA1416
             view?.PostDelayed(() => view.LoadUrl(KioskUrl), 5000);
         }
     }
