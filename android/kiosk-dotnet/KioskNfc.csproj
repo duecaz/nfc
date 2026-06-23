@@ -11,4 +11,8 @@
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Xamarin.AndroidX.Core" Version="1.13.1.6" />
+  </ItemGroup>
+
 </Project>

@@ -212,8 +212,13 @@ public class MainActivity : Activity
                 }
 
                 // fallback: URI del DownloadManager (solo lectura, puede fallar en WPS)
-                contentUri ??= ContentUris.WithAppendedId(
-                    Android.Net.Uri.Parse("content://downloads/public_downloads"), id);
+                if (contentUri == null)
+                {
+                    var baseUri = Android.Net.Uri.Parse("content://downloads/public_downloads");
+                    if (baseUri != null)
+                        contentUri = ContentUris.WithAppendedId(baseUri, id);
+                }
+                if (contentUri == null) return;
 
                 var openIntent = new Intent(Intent.ActionView)
                     .SetDataAndType(contentUri, mime)
