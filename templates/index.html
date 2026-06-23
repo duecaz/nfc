@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>La Nube · Acceso docente</title>
+  <title>La Nube &middot; Acceso docente</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; overflow: hidden; }
@@ -261,27 +261,41 @@
           resetSoon();
         }
       } catch (e) {
-        setStatus('Error de conexi\xF3n', 'err');
+        setStatus('Error de conexión', 'err');
         resetSoon();
       }
     }
 
     function resetSoon() {
       setTimeout(() => {
-        setStatus('Acerc\xE1 tu tarjeta para ingresar');
+        setStatus('Acercá tu tarjeta para ingresar');
         uidEl.textContent = '';
       }, 4000);
     }
 
+    // El lector USB NFC en Android envía el UID con bytes invertidos y nibbles
+    // intercambiados respecto al formato de Windows. Esta función normaliza.
+    function normalizeUid(raw) {
+      if (!/Android/.test(navigator.userAgent)) return raw;
+      const bytes = raw.match(/.{2}/g);
+      if (!bytes || bytes.length < 4) return raw;
+      bytes.reverse();
+      return bytes.map(b => {
+        const hi = parseInt(b[0], 16);
+        const lo = parseInt(b[1], 16);
+        return ((lo << 4) | hi).toString(16).padStart(2, '0').toUpperCase();
+      }).join('');
+    }
+
     catcher.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
-        const uid = catcher.value.trim();
+        const uid = normalizeUid(catcher.value.trim());
         catcher.value = '';
         if (uid.length >= 4) authenticate(uid);
       }
     });
 
-    // Web NFC (Chrome Android 89+) — si est\xE1 disponible, aparece bot\xF3n para activarlo
+    // Web NFC (Chrome Android 89+) — si está disponible, aparece botón para activarlo
     if ('NDEFReader' in window) {
       const nfcWrap = document.createElement('div');
       nfcWrap.style.cssText = 'margin-top:.65rem';
@@ -298,7 +312,7 @@
           const ndef = new NDEFReader();
           await ndef.scan();
           nfcActive = true;
-          nfcBtn.textContent = '📶 NFC activo — acerc\xE1 la tarjeta';
+          nfcBtn.textContent = '📦 NFC activo — acercá la tarjeta';
           nfcBtn.style.color = '#16a34a';
           nfcBtn.style.borderColor = '#16a34a';
           ndef.addEventListener('reading', ({ serialNumber }) => {
