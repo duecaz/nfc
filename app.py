@@ -777,7 +777,7 @@ def admin_nc_users():
         if u:
             by_username[u] = {
                 "uid": uid,
-                "has_token": bool(info.get("token"")),
+                "has_token": bool(info.get("token")),
                 "name": info.get("name", u),
             }
 
