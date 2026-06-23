@@ -19,11 +19,14 @@ public class MainActivity : Activity
     private WebView webView = null!;
     private NfcAdapter? nfcAdapter;
     private const string KioskUrl = "https://lanube.uno";
-    private const string Tag = "LaNubeKiosk";
+    private const string LogTag = "LaNubeKiosk";
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+
+        // Pantalla siempre encendida
+        Window!.AddFlags(WindowManagerFlags.KeepScreenOn);
 
         webView = new WebView(this);
         SetContentView(webView);
@@ -38,14 +41,13 @@ public class MainActivity : Activity
         webView.Settings.DisplayZoomControls = false;
         webView.Settings.UseWideViewPort = true;
         webView.Settings.LoadWithOverviewMode = true;
-        webView.SetWebViewClient(new WebViewClient());
+        webView.SetWebViewClient(new KioskWebViewClient(this));
         webView.SetWebChromeClient(new WebChromeClient());
         webView.LoadUrl(KioskUrl);
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
-        Android.Util.Log.Debug(Tag, $"v7 iniciado. NFC: {(nfcAdapter != null ? "OK" : "NO")}");
+        Android.Util.Log.Debug(LogTag, $"Iniciado. NFC: {(nfcAdapter != null ? "OK" : "NO")}");
 
-        Toast.MakeText(this, "La Nube v7", ToastLength.Long)?.Show();
         HideSystemUI();
     }
 
@@ -61,7 +63,10 @@ public class MainActivity : Activity
         Window!.DecorView.SystemUiVisibility = (StatusBarVisibility)(
             (int)SystemUiFlags.Fullscreen |
             (int)SystemUiFlags.HideNavigation |
-            (int)SystemUiFlags.ImmersiveSticky);
+            (int)SystemUiFlags.ImmersiveSticky |
+            (int)SystemUiFlags.LayoutStable |
+            (int)SystemUiFlags.LayoutHideNavigation |
+            (int)SystemUiFlags.LayoutFullscreen);
 #pragma warning restore CA1416, CS0618
     }
 
@@ -90,45 +95,46 @@ public class MainActivity : Activity
     {
         base.OnNewIntent(intent);
         if (intent == null) return;
-
         try
         {
 #pragma warning disable CA1422
             var tagObj = intent.GetParcelableExtra(NfcAdapter.ExtraTag);
 #pragma warning restore CA1422
-            if (tagObj is not Android.Nfc.Tag tag)
-            {
-                Android.Util.Log.Warn(Tag, "NFC intent sin tag");
-                return;
-            }
-
+            if (tagObj is not Android.Nfc.Tag tag) return;
             var id = tag.GetId();
-            if (id == null || id.Length == 0)
-            {
-                Android.Util.Log.Warn(Tag, "GetId() vacio");
-                return;
-            }
-
+            if (id == null || id.Length == 0) return;
             var raw = BitConverter.ToString(id).Replace("-", "");
-            Android.Util.Log.Debug(Tag, $"RAW bytes: {raw}");
-
             Array.Reverse(id);
             var sb = new System.Text.StringBuilder();
             foreach (var b in id)
                 sb.Append(((b & 0x0F) << 4 | (b >> 4)).ToString("X2"));
             var uid = sb.ToString();
-
-            Android.Util.Log.Debug(Tag, $"UID calculado: {uid}");
+            Android.Util.Log.Debug(LogTag, $"NFC RAW={raw} UID={uid}");
             webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null);
         }
         catch (Exception ex)
         {
-            Android.Util.Log.Error(Tag, $"Error NFC: {ex.Message}");
+            Android.Util.Log.Error(LogTag, $"NFC error: {ex.Message}");
         }
     }
 
     public override void OnBackPressed()
     {
         if (webView.CanGoBack()) webView.GoBack();
+    }
+
+    // Recarga automatica si hay error de red
+    private class KioskWebViewClient : WebViewClient
+    {
+        private readonly MainActivity _host;
+        public KioskWebViewClient(MainActivity host) { _host = host; }
+
+        public override void OnReceivedError(WebView? view, IWebResourceRequest? request, WebResourceError? error)
+        {
+            if (request?.IsForMainFrame != true) return;
+            Android.Util.Log.Warn(LogTag, $"Error carga: {error?.Description}");
+            // Reintenta en 5 segundos
+            view?.PostDelayed(() => view.LoadUrl(KioskUrl), 5000);
+        }
     }
 }
