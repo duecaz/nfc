@@ -297,6 +297,60 @@
       }
     });
 
+    // ---- Captura global de teclas HID (fase captura = antes que cualquier elemento) ----
+    // El lector USB puede enviar caracteres antes de que el intervalo de 100 ms
+    // devuelva el foco a catcher. Este listener los intercepta y los redirige.
+    (function () {
+      // Overlay de debug: muestra las últimas teclas con estado de foco.
+      // Quitar cuando el problema esté resuelto.
+      var dbg = document.createElement('div');
+      dbg.style.cssText =
+        'position:fixed;bottom:2.2rem;right:.4rem;width:220px;' +
+        'background:rgba(0,0,0,.78);color:#0f0;font:8px monospace;' +
+        'padding:4px 5px;border-radius:4px;z-index:9999;pointer-events:none;' +
+        'white-space:pre-wrap;line-height:1.5;max-height:140px;overflow:hidden';
+      document.body.appendChild(dbg);
+      var dbgLines = [];
+      function dbgAdd(msg) {
+        dbgLines.push(msg);
+        if (dbgLines.length > 10) dbgLines.shift();
+        dbg.textContent = dbgLines.join('\n');
+      }
+      dbgAdd('HID debug activo');
+
+      document.addEventListener('keydown', function (e) {
+        var active = document.activeElement;
+        var isCatcher = (active === catcher);
+        var tag = active ? active.tagName : 'NONE';
+        var isRealInput = !isCatcher &&
+          (tag === 'INPUT' || tag === 'TEXTAREA' ||
+           (active && active.isContentEditable));
+        var t = String(Date.now() % 100000).padStart(5, '0');
+
+        dbgAdd(t + ' [' + e.key + '] @' + (isCatcher ? 'CATCHER' : tag.toLowerCase()));
+
+        // catcher ya tiene foco: el listener de catcher lo maneja
+        if (isCatcher) return;
+        // input real de Nextcloud: no interferir
+        if (isRealInput) return;
+
+        // Sin foco útil: acumular en catcher.value y disparar en Enter
+        if (e.key === 'Enter') {
+          var uid = normalizeUid(catcher.value.trim());
+          catcher.value = '';
+          dbgAdd('→ ENTER uid=' + uid + ' (' + uid.length + 'c)');
+          if (uid.length >= 4) authenticate(uid);
+          e.preventDefault();
+        } else if (e.key.length === 1) {
+          catcher.value += e.key;
+          e.preventDefault();
+        } else if (e.key === 'Backspace') {
+          catcher.value = catcher.value.slice(0, -1);
+          e.preventDefault();
+        }
+      }, true); // true = fase de captura, antes que cualquier elemento
+    })();
+
     // Web NFC (Chrome Android 89+) — si está disponible, aparece botón para activarlo
     if ('NDEFReader' in window) {
       const nfcWrap = document.createElement('div');
