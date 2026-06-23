@@ -43,6 +43,7 @@ public class MainActivity : Activity
         webView.Settings.LoadWithOverviewMode = true;
         webView.SetWebViewClient(new KioskWebViewClient(this));
         webView.SetWebChromeClient(new KioskWebChromeClient(this));
+        webView.SetDownloadListener(new KioskDownloadListener(this));
         webView.LoadUrl(KioskUrl);
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
@@ -117,7 +118,6 @@ public class MainActivity : Activity
         }
     }
 
-    // Resultado del selector de archivos
     protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
     {
         base.OnActivityResult(requestCode, resultCode, data);
@@ -139,13 +139,56 @@ public class MainActivity : Activity
         if (webView.CanGoBack()) webView.GoBack();
     }
 
-    // Recarga si hay error de red
+    // ---- Descarga de archivos con cookies de sesión ----
+    private class KioskDownloadListener : Java.Lang.Object, IDownloadListener
+    {
+        private readonly MainActivity _host;
+        public KioskDownloadListener(MainActivity host) => _host = host;
+
+        public void OnDownloadStart(
+            string? url, string? userAgent,
+            string? contentDisposition, string? mimetype, long contentLength)
+        {
+            if (url == null) return;
+            try
+            {
+                var fileName = URLUtil.GuessFileName(url, contentDisposition, mimetype ?? "*/*");
+                var cookies  = CookieManager.Instance?.GetCookie(url) ?? "";
+
+                var req = new DownloadManager.Request(Android.Net.Uri.Parse(url));
+                req.SetMimeType(mimetype);
+                req.AddRequestHeader("Cookie", cookies);
+                req.AddRequestHeader("User-Agent", userAgent);
+                req.SetTitle(fileName);
+                req.SetDescription("La Nube — descargando");
+                req.SetNotificationVisibility(DownloadVisibility.VisibleNotifyCompleted);
+                req.SetDestinationInExternalPublicDir(
+                    Android.OS.Environment.DirectoryDownloads, fileName);
+
+                var dm = (DownloadManager?)_host.GetSystemService(DownloadService);
+                dm?.Enqueue(req);
+
+                Android.Widget.Toast.MakeText(
+                    _host, $"Descargando {fileName}…",
+                    Android.Widget.ToastLength.Long)?.Show();
+
+                Android.Util.Log.Debug(LogTag, $"Download: {fileName}");
+            }
+            catch (Exception ex)
+            {
+                Android.Util.Log.Error(LogTag, $"Download error: {ex.Message}");
+            }
+        }
+    }
+
+    // ---- WebView client: recarga en error de red ----
     private class KioskWebViewClient : WebViewClient
     {
         private readonly MainActivity _host;
         public KioskWebViewClient(MainActivity host) => _host = host;
 
-        public override void OnReceivedError(WebView? view, IWebResourceRequest? request, WebResourceError? error)
+        public override void OnReceivedError(
+            WebView? view, IWebResourceRequest? request, WebResourceError? error)
         {
             if (request?.IsForMainFrame != true) return;
             Android.Util.Log.Warn(LogTag, $"Error red: {error?.Description}");
@@ -153,7 +196,7 @@ public class MainActivity : Activity
         }
     }
 
-    // Selector de archivos para subidas en Nextcloud
+    // ---- ChromeClient: subida de archivos + permisos ----
     private class KioskWebChromeClient : WebChromeClient
     {
         private readonly MainActivity _host;
@@ -164,7 +207,6 @@ public class MainActivity : Activity
             IValueCallback? filePathCallback,
             FileChooserParams? fileChooserParams)
         {
-            // Cancelar callback anterior si quedó pendiente
             _host.filePathCallback?.OnReceiveValue(null);
             _host.filePathCallback = filePathCallback;
             try
@@ -182,6 +224,12 @@ public class MainActivity : Activity
                 _host.filePathCallback = null;
             }
             return true;
+        }
+
+        // Concede permisos de cámara/micrófono automáticamente
+        public override void OnPermissionRequest(PermissionRequest? request)
+        {
+            request?.Grant(request.GetResources());
         }
     }
 }
