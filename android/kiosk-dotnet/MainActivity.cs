@@ -19,11 +19,11 @@ public class MainActivity : Activity
     private WebView webView = null!;
     private NfcAdapter? nfcAdapter;
     private const string KioskUrl = "https://lanube.uno";
+    private const string Tag = "LaNubeKiosk";
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
-        RequestWindowFeature(WindowFeatures.NoTitle);
 
         webView = new WebView(this);
         SetContentView(webView);
@@ -40,17 +40,12 @@ public class MainActivity : Activity
         webView.Settings.LoadWithOverviewMode = true;
         webView.SetWebViewClient(new WebViewClient());
         webView.SetWebChromeClient(new WebChromeClient());
-
-        // Load debug start page to confirm version
-        webView.LoadData(
-            "<html><body style='font-size:28px;padding:30px;font-family:sans-serif;background:#0f172a;color:white'>" +
-            "<h2 style='color:#38bdf8'>La Nube Kiosk v6</h2>" +
-            "<p>NFC: " + (NfcAdapter.GetDefaultAdapter(this) != null ? "✅ disponible" : "❌ no disponible") + "</p>" +
-            "<p style='color:#94a3b8'>Acercá una tarjeta para ver el UID...</p>" +
-            "</body></html>",
-            "text/html", "utf-8");
+        webView.LoadUrl(KioskUrl);
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
+        Android.Util.Log.Debug(Tag, $"v7 iniciado. NFC: {(nfcAdapter != null ? "OK" : "NO")}");
+
+        Toast.MakeText(this, "La Nube v7", ToastLength.Long)?.Show();
         HideSystemUI();
     }
 
@@ -66,10 +61,7 @@ public class MainActivity : Activity
         Window!.DecorView.SystemUiVisibility = (StatusBarVisibility)(
             (int)SystemUiFlags.Fullscreen |
             (int)SystemUiFlags.HideNavigation |
-            (int)SystemUiFlags.ImmersiveSticky |
-            (int)SystemUiFlags.LayoutStable |
-            (int)SystemUiFlags.LayoutHideNavigation |
-            (int)SystemUiFlags.LayoutFullscreen);
+            (int)SystemUiFlags.ImmersiveSticky);
 #pragma warning restore CA1416, CS0618
     }
 
@@ -104,21 +96,21 @@ public class MainActivity : Activity
 #pragma warning disable CA1422
             var tagObj = intent.GetParcelableExtra(NfcAdapter.ExtraTag);
 #pragma warning restore CA1422
-
             if (tagObj is not Android.Nfc.Tag tag)
             {
-                ShowHtml("Sin tag", "El intent no trajo EXTRA_TAG.", "", "");
+                Android.Util.Log.Warn(Tag, "NFC intent sin tag");
                 return;
             }
 
             var id = tag.GetId();
             if (id == null || id.Length == 0)
             {
-                ShowHtml("Sin ID", "GetId() devolvió vacío.", "", "");
+                Android.Util.Log.Warn(Tag, "GetId() vacio");
                 return;
             }
 
             var raw = BitConverter.ToString(id).Replace("-", "");
+            Android.Util.Log.Debug(Tag, $"RAW bytes: {raw}");
 
             Array.Reverse(id);
             var sb = new System.Text.StringBuilder();
@@ -126,30 +118,13 @@ public class MainActivity : Activity
                 sb.Append(((b & 0x0F) << 4 | (b >> 4)).ToString("X2"));
             var uid = sb.ToString();
 
-            var match = uid == "53A3A343300001" ? "SÍ COINCIDE ✅" : "NO coincide ❌";
-            ShowHtml(raw, uid, match, id.Length.ToString());
+            Android.Util.Log.Debug(Tag, $"UID calculado: {uid}");
+            webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null);
         }
         catch (Exception ex)
         {
-            ShowHtml("EXCEPCIÓN", ex.Message, "", "");
+            Android.Util.Log.Error(Tag, $"Error NFC: {ex.Message}");
         }
-    }
-
-    private void ShowHtml(string raw, string uid, string match, string bytes)
-    {
-        RunOnUiThread(() =>
-            webView.LoadData(
-                "<html><body style='font-size:26px;padding:30px;font-family:monospace;background:#0f172a;color:white'>" +
-                "<h2 style='color:#38bdf8'>La Nube Kiosk v6 — NFC debug</h2>" +
-                $"<p><b>RAW (Android):</b><br><span style='color:#fbbf24'>{raw}</span></p>" +
-                $"<p><b>UID calculado:</b><br><span style='color:#34d399'>{uid}</span></p>" +
-                $"<p><b>Windows esperado:</b><br><span style='color:#94a3b8'>53A3A343300001</span></p>" +
-                $"<p style='font-size:30px'>{match}</p>" +
-                "<br><button onclick=\"window.location='https://lanube.uno'\" " +
-                "style='font-size:22px;padding:12px 24px;border-radius:8px;background:#1e3a5f;color:white;border:none'>" +
-                "Ir al kiosko</button>" +
-                "</body></html>",
-                "text/html", "utf-8"));
     }
 
     public override void OnBackPressed()
