@@ -41,6 +41,8 @@ public class MainActivity : Activity
         webView.Settings.DisplayZoomControls = false;
         webView.Settings.UseWideViewPort = true;
         webView.Settings.LoadWithOverviewMode = true;
+        webView.Settings.JavaScriptCanOpenWindowsAutomatically = true;
+        webView.Settings.SetSupportMultipleWindows(true);
         webView.SetWebViewClient(new KioskWebViewClient(this));
         webView.SetWebChromeClient(new KioskWebChromeClient(this));
         webView.SetDownloadListener(new KioskDownloadListener(this));
@@ -181,11 +183,23 @@ public class MainActivity : Activity
         }
     }
 
-    // ---- WebView client: recarga en error de red ----
+    // ---- WebView client: sesión expirada + recarga en error de red ----
     private class KioskWebViewClient : WebViewClient
     {
         private readonly MainActivity _host;
         public KioskWebViewClient(MainActivity host) => _host = host;
+
+        public override bool ShouldOverrideUrlLoading(WebView? view, IWebResourceRequest? request)
+        {
+            var url = request?.Url?.ToString() ?? "";
+            if (url.Contains("/app/login") || url.Contains("index.php/login"))
+            {
+                Android.Util.Log.Warn(LogTag, "Sesión NC expirada, volviendo al kiosko");
+                view?.LoadUrl(KioskUrl);
+                return true;
+            }
+            return false;
+        }
 
         public override void OnReceivedError(
             WebView? view, IWebResourceRequest? request, WebResourceError? error)
@@ -196,11 +210,41 @@ public class MainActivity : Activity
         }
     }
 
-    // ---- ChromeClient: subida de archivos + permisos ----
+    // ---- Popup/nueva-ventana: carga en el WebView principal ----
+    private class PopupRedirectClient : WebViewClient
+    {
+        private readonly WebView _mainView;
+        public PopupRedirectClient(WebView mainView) => _mainView = mainView;
+
+        public override void OnPageStarted(WebView? view, string? url, Android.Graphics.Bitmap? favicon)
+        {
+            if (!string.IsNullOrEmpty(url) && !url.StartsWith("about:"))
+            {
+                Android.Util.Log.Debug(LogTag, $"Popup redirigido: {url}");
+                _mainView.LoadUrl(url);
+            }
+            view?.StopLoading();
+        }
+    }
+
+    // ---- ChromeClient: subida de archivos + ventanas emergentes + permisos ----
     private class KioskWebChromeClient : WebChromeClient
     {
         private readonly MainActivity _host;
         public KioskWebChromeClient(MainActivity host) => _host = host;
+
+        public override bool OnCreateWindow(WebView? view, bool isDialog, bool isUserGesture, Android.OS.Message? resultMsg)
+        {
+            if (resultMsg?.Obj is WebView.WebViewTransport transport)
+            {
+                var popup = new WebView(view!.Context!);
+                popup.SetWebViewClient(new PopupRedirectClient(_host.webView));
+                transport.WebView = popup;
+                resultMsg.SendToTarget();
+                return true;
+            }
+            return false;
+        }
 
         public override bool OnShowFileChooser(
             WebView? webView,
@@ -226,7 +270,6 @@ public class MainActivity : Activity
             return true;
         }
 
-        // Concede permisos de cámara/micrófono automáticamente
         public override void OnPermissionRequest(PermissionRequest? request)
         {
             request?.Grant(request.GetResources());
