@@ -20,7 +20,6 @@ public class MainActivity : Activity
     private NfcAdapter? nfcAdapter;
 
     private const string KioskUrl = "https://lanube.uno";
-    private const string Version = "v4-debug";
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
@@ -45,14 +44,8 @@ public class MainActivity : Activity
         webView.LoadUrl(KioskUrl);
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
-        var nfcStatus = nfcAdapter != null ? "NFC OK" : "NFC NO DISPONIBLE";
 
-        // Dialog that MUST be dismissed — confirms version is installed
-        new AlertDialog.Builder(this)!
-            .SetTitle($"La Nube Kiosk {Version}")!
-            .SetMessage($"{nfcStatus}\nAceptá y acercá la tarjeta.")!
-            .SetPositiveButton("OK", (s, e) => { })!
-            .Show();
+        Toast.MakeText(this, "La Nube Kiosk v5 - acercaá tarjeta", ToastLength.Long)?.Show();
 
         HideSystemUI();
     }
@@ -102,29 +95,67 @@ public class MainActivity : Activity
         base.OnNewIntent(intent);
         if (intent == null) return;
 
+        try
+        {
 #pragma warning disable CA1422
-        var tag = intent.GetParcelableExtra(NfcAdapter.ExtraTag) as Tag;
+            var tagObj = intent.GetParcelableExtra(NfcAdapter.ExtraTag);
 #pragma warning restore CA1422
-        if (tag?.GetId() is not byte[] id) return;
 
-        var raw = BitConverter.ToString(id).Replace("-", "");
-
-        Array.Reverse(id);
-        var sb = new System.Text.StringBuilder();
-        foreach (var b in id)
-            sb.Append(((b & 0x0F) << 4 | (b >> 4)).ToString("X2"));
-        var uid = sb.ToString();
-
-        // Show both values — user MUST tap OK to dismiss
-        new AlertDialog.Builder(this)!
-            .SetTitle("Tarjeta detectada")!
-            .SetMessage($"RAW (Android):\n{raw}\n\nUID a enviar al servidor:\n{uid}\n\n¿UID coincide con Windows?")!
-            .SetPositiveButton("Sí, autenticar", (s, e) =>
+            if (tagObj == null)
             {
-                webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null);
-            })!
-            .SetNegativeButton("Cancelar", (s, e) => { })!
-            .Show();
+                ShowDialog("NFC", "Sin tag en el intent.");
+                return;
+            }
+
+            if (tagObj is not Android.Nfc.Tag tag)
+            {
+                ShowDialog("NFC", $"Tipo inesperado: {tagObj.GetType().Name}");
+                return;
+            }
+
+            var id = tag.GetId();
+            if (id == null || id.Length == 0)
+            {
+                ShowDialog("NFC", "GetId() devolvió vacío.");
+                return;
+            }
+
+            var raw = BitConverter.ToString(id).Replace("-", "");
+
+            // Reverse + nibble swap to match Windows USB reader format
+            Array.Reverse(id);
+            var sb = new System.Text.StringBuilder();
+            foreach (var b in id)
+                sb.Append(((b & 0x0F) << 4 | (b >> 4)).ToString("X2"));
+            var uid = sb.ToString();
+
+            RunOnUiThread(() =>
+            {
+                new AlertDialog.Builder(this)!
+                    .SetTitle("Tarjeta detectada (v5)")!
+                    .SetMessage($"RAW bytes:\n{raw}\n\nUID calculado:\n{uid}\n\n¿UID coincide con Windows ({"53A3A343300001"})?")
+                    !.SetPositiveButton("Sí, autenticar", (s, e) =>
+                        webView.EvaluateJavascript($"if(typeof authenticate==='function')authenticate('{uid}')", null))!
+                    .SetNegativeButton("Solo ver", (s, e) => { })!
+                    .SetCancelable(false)!
+                    .Show();
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowDialog("Error NFC", ex.Message);
+        }
+    }
+
+    private void ShowDialog(string title, string msg)
+    {
+        RunOnUiThread(() =>
+            new AlertDialog.Builder(this)!
+                .SetTitle(title)!
+                .SetMessage(msg)!
+                .SetPositiveButton("OK", (s, e) => { })!
+                .SetCancelable(false)!
+                .Show());
     }
 
     public override void OnBackPressed()
