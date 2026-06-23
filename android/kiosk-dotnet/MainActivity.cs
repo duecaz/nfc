@@ -23,7 +23,7 @@ public class MainActivity : Activity
 
     private const string KioskUrl   = "https://lanube.uno";
     private const string LogTag     = "LaNubeKiosk";
-    private const string ApkVersion = "3";
+    private const string ApkVersion = "4";
     private const int    FileChooserCode = 1001;
 
     protected override void OnCreate(Bundle? savedInstanceState)
@@ -183,26 +183,45 @@ public class MainActivity : Activity
             var cursor = dm.InvokeQuery(query);
             if (cursor == null || !cursor.MoveToFirst()) { cursor?.Close(); return; }
 
-            var statusIdx = cursor.GetColumnIndex(DownloadManager.ColumnStatus);
-            var mimeIdx   = cursor.GetColumnIndex("media_type");
-            var status    = (DownloadStatus)cursor.GetInt(statusIdx);
-            var mime      = (mimeIdx >= 0 ? cursor.GetString(mimeIdx) : null) ?? "*/*";
+            var statusIdx   = cursor.GetColumnIndex(DownloadManager.ColumnStatus);
+            var mimeIdx     = cursor.GetColumnIndex("media_type");
+            var localUriIdx = cursor.GetColumnIndex(DownloadManager.ColumnLocalUri);
+            var status      = (DownloadStatus)cursor.GetInt(statusIdx);
+            var mime        = (mimeIdx >= 0 ? cursor.GetString(mimeIdx) : null) ?? "*/*";
+            var localUriStr = localUriIdx >= 0 ? cursor.GetString(localUriIdx) : null;
             cursor.Close();
 
             if (status != DownloadStatus.Successful) return;
             try
             {
-                // file:// lanza FileUriExposedException en Android 7+.
-                // El ContentProvider del DownloadManager expone content://downloads/public_downloads/{id},
-                // que ya lleva los permisos de lectura incorporados.
-                var downloadUri = ContentUris.WithAppendedId(
+                Android.Net.Uri? contentUri = null;
+
+                // FileProvider convierte file:// en content:// con permisos r+w
+                if (!string.IsNullOrEmpty(localUriStr))
+                {
+                    var localPath = Android.Net.Uri.Parse(localUriStr)?.Path;
+                    if (!string.IsNullOrEmpty(localPath))
+                    {
+                        var javaFile = new Java.IO.File(localPath);
+                        if (javaFile.Exists())
+                        {
+                            contentUri = AndroidX.Core.Content.FileProvider.GetUriForFile(
+                                _host, "uno.lanube.kiosk.fileprovider", javaFile);
+                        }
+                    }
+                }
+
+                // fallback: URI del DownloadManager (solo lectura, puede fallar en WPS)
+                contentUri ??= ContentUris.WithAppendedId(
                     Android.Net.Uri.Parse("content://downloads/public_downloads"), id);
 
                 var openIntent = new Intent(Intent.ActionView)
-                    .SetDataAndType(downloadUri, mime)
-                    .SetFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
+                    .SetDataAndType(contentUri, mime)
+                    .SetFlags(ActivityFlags.NewTask |
+                              ActivityFlags.GrantReadUriPermission |
+                              ActivityFlags.GrantWriteUriPermission);
                 _host.StartActivity(openIntent);
-                Android.Util.Log.Debug(LogTag, $"Abriendo descarga id={id} ({mime})");
+                Android.Util.Log.Debug(LogTag, $"Abriendo descarga id={id} uri={contentUri} ({mime})");
             }
             catch (Exception ex)
             {
