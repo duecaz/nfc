@@ -183,7 +183,7 @@ public class MainActivity : Activity
         }
     }
 
-    // ---- WebView client: sesión expirada + recarga en error de red ----
+    // ---- WebView client: sesión expirada + notificaciones + caché + red ----
     private class KioskWebViewClient : WebViewClient
     {
         private readonly MainActivity _host;
@@ -199,6 +199,27 @@ public class MainActivity : Activity
                 return true;
             }
             return false;
+        }
+
+        public override void OnPageFinished(WebView? view, string? url)
+        {
+            base.OnPageFinished(view, url);
+
+            // Rechazar silenciosamente el permiso de notificaciones de NC
+            view?.EvaluateJavascript(
+                "(function(){" +
+                "if('Notification' in window){" +
+                "try{Object.defineProperty(Notification,'permission',{get:()=>'denied',configurable:true});}catch(e){}" +
+                "Notification.requestPermission=function(){return Promise.resolve('denied');};}" +
+                "})()", null);
+
+            // Al volver al kiosko (fin de sesión): limpiar caché HTTP e historial
+            if (url == KioskUrl || url == KioskUrl + "/")
+            {
+                view?.ClearCache(true);
+                view?.ClearHistory();
+                Android.Util.Log.Debug(LogTag, "Sesión cerrada: caché e historial limpiados");
+            }
         }
 
         public override void OnReceivedError(
