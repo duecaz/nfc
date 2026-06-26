@@ -5,23 +5,19 @@ plugins {
 
 android {
     namespace = "com.test.nfctest"
-    compileSdk = 33
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.test.nfctest"
         minSdk = 28
-        targetSdk = 33
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
     }
 
     buildTypes {
-        debug {
-            isMinifyEnabled = false
-        }
-        release {
-            isMinifyEnabled = false
-        }
+        debug   { isMinifyEnabled = false }
+        release { isMinifyEnabled = false }
     }
 
     compileOptions {
@@ -29,15 +25,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
 }
 
 dependencies {
-    // classes.jar del panel (TvControlManager, etc.) — copiar a app/libs/
-    // Disponible en el dispositivo en runtime, solo se usa para compilar
-    compileOnly(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
-
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // classes.jar del panel — copiar a app/libs/classes.jar
+    compileOnly(fileTree("libs") { include("*.jar") })
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
