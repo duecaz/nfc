@@ -13,6 +13,7 @@ interface IDataCallback {
 object NfcKit {
     private const val TAG = "NfcKit"
     private const val REGADDR_CARD_READ = 0x21
+    private const val POLL_MS = 200L  // 200ms para ganarle a dazzle_nfc (que lee cada ~1s)
 
     private val cs = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var autoJob: Job? = null
@@ -26,7 +27,6 @@ object NfcKit {
         val setting = try {
             Settings.Global.getInt(ctx.contentResolver, "dazzle_nfc_i2c_addr", 6)
         } catch (e: SecurityException) {
-            // clave @hide, no accesible desde apps normales en Android S+
             Log.w(TAG, "dazzle_nfc_i2c_addr no accesible, usando default=6 (0xA6)")
             6
         }
@@ -47,15 +47,14 @@ object NfcKit {
     fun startReadJob() {
         if (autoJob?.isActive == true) return
         autoJob = cs.launch {
-            Log.i(TAG, "startReadJob bus=$i2cBus")
-            var nextTime = 0L
+            Log.i(TAG, "startReadJob bus=$i2cBus poll=${POLL_MS}ms")
             while (isActive) {
-                if (System.currentTimeMillis() > nextTime) {
-                    nextTime = System.currentTimeMillis() + 1_000
-                    cardId = readCardId()
-                    Log.i(TAG, "cardId=$cardId")
-                    callBack?.callback(cardId)
+                val uid = readCardId()
+                if (uid.isNotEmpty()) {
+                    cardId = uid
+                    callBack?.callback(uid)
                 }
+                delay(POLL_MS)
             }
             Log.i(TAG, "stopReadJob")
         }
@@ -68,12 +67,13 @@ object NfcKit {
             val temp = IntArray(6)
             val ret = TvControlManager.getInstance()
                 .i2c_read(i2cBus, i2cAddr, REGADDR_CARD_READ, 5, temp)
-            if (ret == 0)
-                temp.take(4).joinToString("") { it.toString(16).padStart(2, '0') }
-            else ""
+            if (ret == 0) {
+                val uid = temp.take(4).joinToString("") { it.toString(16).padStart(2, '0') }
+                if (uid != "00000000") uid else ""
+            } else ""
         } catch (e: Throwable) {
             Log.e(TAG, "readCardId error: ${e.javaClass.simpleName}: ${e.message}")
-            "ERR"
+            ""
         }
     }
 }

@@ -48,6 +48,48 @@ nginx config: `~/docker/nginx/data/nginx/custom/http.conf`
 
 ---
 
+## Pantalla Android — ADB
+
+- IP del dispositivo: `192.168.1.57:5555`
+- Conectar: `adb connect 192.168.1.57:5555`
+- Siempre usar `-s 192.168.1.57:5555` en cada comando adb
+
+### dazzle_nfc (daemon NFC del panel)
+
+El panel tiene un daemon del fabricante que gestiona el NFC por I2C.
+Si el NFC deja de responder (no beep al pasar tarjeta), reiniciar:
+
+```powershell
+adb -s 192.168.1.57:5555 shell stop dazzle_nfc
+adb -s 192.168.1.57:5555 shell start dazzle_nfc
+```
+
+**Importante:** dazzle_nfc compite con apps que leen I2C directamente.
+Para que `com.test.hola` lea el UID sin interferencia, detener dazzle_nfc
+antes de probar y reiniciarlo al terminar.
+
+### nfc-test APK (com.test.hola)
+
+- Proyecto: `android/nfc-test/`
+- Requiere `classes.jar` del fabricante en `app/libs/` (NO en git, copiar manualmente)
+- `classes.jar` va como `implementation` (no compileOnly) para que TvControlManager
+  sea encontrable en runtime
+- Compilar desde Android Studio (Ctrl+F9), luego:
+
+```powershell
+adb -s 192.168.1.57:5555 install -r app\build\outputs\apk\debug\app-debug.apk
+adb -s 192.168.1.57:5555 shell am start -n com.test.hola/.MainActivity
+```
+
+- `dazzle_nfc_i2c_addr` es clave @hide — SecurityException en apps normales,
+  usar try/catch con default 6 (→ addr=0xA6)
+- Poll cada 200ms para capturar UID antes de que dazzle_nfc lo consuma
+- cardId=`00000000` = sin tarjeta; cardId=UID hex = tarjeta detectada
+- Sostener la tarjeta 2+ segundos para asegurar captura
+- Botón en pantalla cicla entre Bus 4 → 6 → 7
+
+---
+
 ## Repo y deploy
 
 - Repo: `duecaz/nfc` — rama activa: `claude/clever-fermat-6852kl`
@@ -154,6 +196,12 @@ Verificar con `curl -s http://localhost:8200/health` que la versión coincide.
 
 - **Después de push por MCP**, el repo local queda desincronizado. Si se
   necesita trabajar con git: `git fetch origin && git reset --hard origin/<rama>`.
+
+- **dazzle_nfc compite con I2C directo** — detenerlo antes de probar NFC
+  con `com.test.hola`. Reiniciar con stop/start después.
+
+- **classes.jar debe ser `implementation`** (no `compileOnly`) en el proyecto
+  nfc-test para que TvControlManager sea encontrable en runtime.
 
 ---
 
