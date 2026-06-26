@@ -2,92 +2,24 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
-    android:background="#0f172a"
-    android:padding="24dp">
+    android:gravity="center"
+    android:background="#000000"
+    android:orientation="vertical">
 
-    <!-- Izquierda: UID grande -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center">
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hola Mundo"
+        android:textColor="#00FF00"
+        android:textSize="80sp"
+        android:textStyle="bold" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="NFC I2C Test"
-            android:textColor="#475569"
-            android:textSize="14sp"
-            android:layout_marginBottom="16dp"/>
-
-        <TextView
-            android:id="@+id/tv_uid"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="--------"
-            android:textColor="#22c55e"
-            android:textSize="56sp"
-            android:fontFamily="monospace"
-            android:letterSpacing="0.08"/>
-
-        <TextView
-            android:id="@+id/tv_status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Iniciando..."
-            android:textColor="#64748b"
-            android:textSize="15sp"
-            android:layout_marginTop="12dp"/>
-
-        <TextView
-            android:id="@+id/tv_raw"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="#334155"
-            android:textSize="11sp"
-            android:fontFamily="monospace"
-            android:layout_marginTop="8dp"/>
-
-        <Button
-            android:id="@+id/btn_bus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Bus actual: 4"
-            android:backgroundTint="#1e293b"
-            android:textColor="#94a3b8"
-            android:layout_marginTop="24dp"/>
-
-    </LinearLayout>
-
-    <!-- Derecha: log -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:paddingStart="24dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Log"
-            android:textColor="#334155"
-            android:textSize="11sp"
-            android:layout_marginBottom="8dp"/>
-
-        <TextView
-            android:id="@+id/tv_log"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="#475569"
-            android:textSize="11sp"
-            android:fontFamily="monospace"
-            android:lineSpacingMultiplier="1.5"/>
-
-    </LinearLayout>
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="NFC Test — OK"
+        android:textColor="#FFFFFF"
+        android:textSize="32sp"
+        android:layout_marginTop="24dp" />
 
 </LinearLayout>

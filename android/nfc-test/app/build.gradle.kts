@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.test.nfctest"
+    namespace = "com.test.hola"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.test.nfctest"
+        applicationId = "com.test.hola"
         minSdk = 28
         targetSdk = 34
         versionCode = 1
@@ -29,7 +29,4 @@ android {
 }
 
 dependencies {
-    // classes.jar del panel — copiar a app/libs/classes.jar
-    compileOnly(fileTree("libs") { include("*.jar") })
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
