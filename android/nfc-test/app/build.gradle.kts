@@ -11,7 +11,7 @@ android {
         applicationId = "com.test.hola"
         minSdk = 28
         targetSdk = 34
-        versionCode = 4
+        versionCode = 5
         versionName = "1.0"
     }
 
@@ -26,13 +26,9 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
-
-    packaging {
-        resources.excludes += "/META-INF/**"
-    }
 }
 
 dependencies {
-    implementation(fileTree("libs") { include("*.jar") })
+    // classes.jar ya no necesario: TvControlManager se carga desde /system/framework/ via DexClassLoader
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
