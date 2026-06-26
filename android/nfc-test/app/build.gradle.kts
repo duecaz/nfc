@@ -11,7 +11,7 @@ android {
         applicationId = "com.test.hola"
         minSdk = 28
         targetSdk = 34
-        versionCode = 2
+        versionCode = 3
         versionName = "1.0"
     }
 
@@ -26,10 +26,15 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
+
+    packaging {
+        // evitar conflictos si clases ya existen en el sistema
+        resources.excludes += "/META-INF/**"
+    }
 }
 
 dependencies {
-    // classes.jar del fabricante — copiar manualmente a app/libs/classes.jar
-    compileOnly(fileTree("libs") { include("*.jar") })
+    // incluido en el APK para que TvControlManager sea encontrable en runtime
+    implementation(fileTree("libs") { include("*.jar") })
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
