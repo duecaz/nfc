@@ -64,29 +64,105 @@ adb -s 192.168.1.57:5555 shell stop dazzle_nfc
 adb -s 192.168.1.57:5555 shell start dazzle_nfc
 ```
 
-**Importante:** dazzle_nfc compite con apps que leen I2C directamente.
-Para que `com.test.hola` lea el UID sin interferencia, detener dazzle_nfc
-antes de probar y reiniciarlo al terminar.
+dazzle_nfc compite con apps que leen I2C directamente. Con poll a 200ms
+la app puede capturar el UID incluso con dazzle_nfc corriendo.
+
+---
+
+## NFC I2C del panel — Hallazgos de implementación
+
+### Cómo leer el NFC del panel desde una app normal (sin firma del fabricante)
+
+El panel tiene un lector NFC conectado al bus I2C. El fabricante provee
+`NfcKit.kt` + `classes.jar` pero el JAR es un **stub** (métodos vacíos).
+La implementación real de `TvControlManager` está en el sistema del dispositivo.
+
+**Solución verificada:** `DexClassLoader` carga el JAR real del sistema.
+
+```kotlin
+val loader = DexClassLoader(
+    "/system/framework/droidlogic.jar",
+    ctx.cacheDir.absolutePath,
+    null,
+    ClassLoader.getSystemClassLoader()
+)
+val cls = loader.loadClass("com.droidlogic.app.tv.TvControlManager")
+val getInstance = cls.getMethod("getInstance")
+val tvManager = getInstance.invoke(null)
+val i2cRead = cls.getMethod("i2c_read",
+    Int::class.java, Int::class.java, Int::class.java,
+    Int::class.java, IntArray::class.java)
+```
+
+### JARs del sistema en el dispositivo (confirmados)
+
+```
+/system/framework/droidlogic.jar              ← TvControlManager REAL (usar este)
+/system/framework/droidlogic-tv.jar
+/system/framework/droidlogic.software.core.jar
+/system/framework/droidlogic.tv.software.core.jar
+```
+
+### Parámetros I2C del NFC
+
+| Parámetro | Valor |
+|---|---|
+| Registro lectura | `0x21` (REGADDR_CARD_READ) |
+| Dir. I2C default | `0xA6` (cuando `dazzle_nfc_i2c_addr = 6`) |
+| Dir. I2C alt 1 | `0xA8` (cuando `dazzle_nfc_i2c_addr = 8`) |
+| Dir. I2C alt 2 | `0xA2` (otros valores) |
+| Bus init | `6` (hardware normal) / `7` (rk3576v2) |
+| Bus read | `4` (hardware normal) / `7` (rk3576v2) |
+| Bytes UID | 4 bytes, formato hex 8 chars: ej. `D779CD0A` |
+| Sin tarjeta | `ret==0` pero bytes todos `0x00` → `00000000` |
+
+### Restricciones de seguridad Android S+
+
+- `Settings.Global.getInt("dazzle_nfc_i2c_addr")` lanza `SecurityException`
+  en apps normales (clave `@hide`). Usar `try/catch` con default `6` → `0xA6`.
+- `dazzle_nfc_i2c_addr` = 6 → addr `0xA6` (más común)
+- NO se necesita firma del fabricante ni `sharedUserId` para leer NFC.
+
+### Flujo de lectura (patrón NfcKit del fabricante)
+
+```kotlin
+// onResume
+NfcKit.register(callback)   // registrar callback
+NfcKit.startReadJob()       // iniciar poll 200ms
+
+// onPause
+NfcKit.stopReadJob()
+NfcKit.unregister(callback)
+
+// callback recibe:
+// "D779CD0A" → tarjeta detectada (UID hex 8 chars)
+// ""          → sin tarjeta o sin cambio
+```
+
+### Errores conocidos y soluciones
+
+| Error | Causa | Solución |
+|---|---|---|
+| `NoClassDefFoundError: TvControlManager` | `compileOnly` excluye el JAR del APK | Usar `DexClassLoader` desde `/system/framework/droidlogic.jar` |
+| `INSTALL_FAILED_SHARED_USER_INCOMPATIBLE` | `android:sharedUserId="android.uid.system"` en manifest | Quitar ese atributo, no se necesita |
+| `SecurityException: dazzle_nfc_i2c_addr` | Clave `@hide` en Android S+ | `try/catch` con default=6 |
+| Siempre `00000000` | classes.jar es stub (no hace JNI real) | DexClassLoader desde JAR del sistema |
+| No detecta tarjeta con dazzle_nfc corriendo | Race condition: dazzle_nfc lee primero | Poll 200ms; sostener tarjeta 2+ segundos |
 
 ### nfc-test APK (com.test.hola)
 
 - Proyecto: `android/nfc-test/`
-- Requiere `classes.jar` del fabricante en `app/libs/` (NO en git, copiar manualmente)
-- `classes.jar` va como `implementation` (no compileOnly) para que TvControlManager
-  sea encontrable en runtime
+- **NO necesita `classes.jar`** — DexClassLoader lo reemplaza
 - Compilar desde Android Studio (Ctrl+F9), luego:
 
 ```powershell
 adb -s 192.168.1.57:5555 install -r app\build\outputs\apk\debug\app-debug.apk
 adb -s 192.168.1.57:5555 shell am start -n com.test.hola/.MainActivity
+adb -s 192.168.1.57:5555 logcat -s NfcKit:D -T 1
 ```
 
-- `dazzle_nfc_i2c_addr` es clave @hide — SecurityException en apps normales,
-  usar try/catch con default 6 (→ addr=0xA6)
-- Poll cada 200ms para capturar UID antes de que dazzle_nfc lo consuma
-- cardId=`00000000` = sin tarjeta; cardId=UID hex = tarjeta detectada
-- Sostener la tarjeta 2+ segundos para asegurar captura
 - Botón en pantalla cicla entre Bus 4 → 6 → 7
+- Heartbeat log cada 5s confirma que el loop está vivo
 
 ---
 
@@ -108,8 +184,6 @@ curl -o templates/cambiar_clave.html "https://raw.githubusercontent.com/duecaz/n
 docker compose down && docker compose build --no-cache && docker compose up -d && \
 sleep 5 && curl -s http://localhost:8200/health
 ```
-
-El health debe devolver `"version": "N"` para confirmar que levantó correctamente.
 
 ### Si el navegador no muestra cambios después del deploy
 
@@ -197,11 +271,14 @@ Verificar con `curl -s http://localhost:8200/health` que la versión coincide.
 - **Después de push por MCP**, el repo local queda desincronizado. Si se
   necesita trabajar con git: `git fetch origin && git reset --hard origin/<rama>`.
 
-- **dazzle_nfc compite con I2C directo** — detenerlo antes de probar NFC
-  con `com.test.hola`. Reiniciar con stop/start después.
+- **`classes.jar` del fabricante es un stub** — usar `DexClassLoader` desde
+  `/system/framework/droidlogic.jar` para la implementación JNI real.
 
-- **classes.jar debe ser `implementation`** (no `compileOnly`) en el proyecto
-  nfc-test para que TvControlManager sea encontrable en runtime.
+- **No se necesita firma del fabricante** para leer NFC del panel —
+  DexClassLoader + poll 200ms es suficiente.
+
+- **dazzle_nfc compite con I2C directo** — poll 200ms + sostener tarjeta
+  2+ segundos permite capturar el UID incluso con el daemon corriendo.
 
 ---
 
@@ -212,3 +289,5 @@ Verificar con `curl -s http://localhost:8200/health` que la versión coincide.
 3. Reemplazar servidor dev de Flask con Gunicorn.
 4. Cambiar contraseñas de testeo.
 5. Eliminar regla `app.lanube.uno` en Cloudflare (ya no existe, verificar).
+6. Integrar lectura NFC I2C del panel en kiosk-dotnet usando DexClassLoader
+   (reemplazar o complementar el lector USB HID).
