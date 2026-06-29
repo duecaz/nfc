@@ -5,6 +5,7 @@ import json
 import os
 import re
 import secrets
+import threading
 import xml.etree.ElementTree as ET
 from functools import wraps
 from pathlib import Path
@@ -26,7 +27,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "12"
+VERSION              = "13"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -62,17 +63,40 @@ _CLEANUP_JS = """\
 })();
 """
 
+# ---------------------------------------------------------------------------
+# users.json — cache por mtime, escritura con lock
+# ---------------------------------------------------------------------------
+
+_users_lock  = threading.Lock()
+_users_cache = None   # dict o None si nunca se cargó
+_users_mtime = 0.0    # st_mtime del archivo cuando se cargó
+
 
 def load_users():
-    if USERS_FILE.exists():
-        return json.loads(USERS_FILE.read_text(encoding="utf-8"))
-    return {}
+    """Devuelve el diccionario de usuarios. Relee el archivo solo si cambió."""
+    global _users_cache, _users_mtime
+    with _users_lock:
+        if USERS_FILE.exists():
+            mtime = USERS_FILE.stat().st_mtime
+            if _users_cache is None or mtime > _users_mtime:
+                _users_cache = json.loads(USERS_FILE.read_text(encoding="utf-8"))
+                _users_mtime = mtime
+            return dict(_users_cache)  # copia superficial: protege el cache de mutaciones
+        return {}
 
 
 def save_users(users):
-    USERS_FILE.write_text(json.dumps(users, indent=2, ensure_ascii=False),
-                          encoding="utf-8")
+    """Persiste y actualiza el cache de forma atómica."""
+    global _users_cache, _users_mtime
+    with _users_lock:
+        USERS_FILE.write_text(
+            json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        _users_cache = dict(users)
+        _users_mtime = USERS_FILE.stat().st_mtime
 
+
+# ---------------------------------------------------------------------------
 
 def get_requesttoken(html):
     m = REQUESTTOKEN_RE.search(html) or HEAD_TOKEN_RE.search(html)
