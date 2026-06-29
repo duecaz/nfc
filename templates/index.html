@@ -159,10 +159,114 @@
       position: fixed; top: -999px; left: -999px;
       width: 1px; height: 1px; opacity: 0;
     }
+
+    /* ---- Duration picker overlay ---- */
+    .picker-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,.92);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .picker-overlay.visible { display: flex; }
+
+    .picker-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 2.5rem 2.25rem 2rem;
+      width: 90%; max-width: 420px;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,.28);
+    }
+
+    .picker-card h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: #0f172a;
+      margin-bottom: .3rem;
+    }
+
+    .picker-sub {
+      font-size: .85rem;
+      color: #64748b;
+      margin-bottom: 1.75rem;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      justify-content: center;
+      margin-bottom: 1.75rem;
+    }
+
+    .chip {
+      padding: .45rem 1.1rem;
+      border-radius: 999px;
+      border: 1.5px solid #cbd5e1;
+      background: transparent;
+      color: #374151;
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      font-family: inherit;
+    }
+    .chip:hover { border-color: #0f172a; color: #0f172a; background: #f8fafc; }
+    .chip.active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
+
+    .btn-confirm {
+      width: 100%;
+      padding: .75rem 1.5rem;
+      background: #0f172a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s;
+      letter-spacing: -.01em;
+      font-family: inherit;
+    }
+    .btn-confirm:hover  { background: #1e293b; }
+    .btn-confirm:active { background: #070d18; }
+
+    .countdown-hint {
+      margin-top: .75rem;
+      font-size: .78rem;
+      color: #94a3b8;
+      min-height: 1.1rem;
+    }
   </style>
 </head>
 <body>
   <input id="catcher" autocomplete="off" autofocus>
+
+  <!-- Duration picker overlay -->
+  <div class="picker-overlay" id="picker-overlay" role="dialog" aria-modal="true" aria-label="Seleccioná la duración de la sesión">
+    <div class="picker-card">
+      <h2>&#x1F4DA;&nbsp; ¿Cuánto tiempo?</h2>
+      <p class="picker-sub">Seleccioná la duración de la sesión</p>
+      <div class="chips" id="chips">
+        <button class="chip active" data-min="40">40 min</button>
+        <button class="chip" data-min="80">1h 20min</button>
+        <button class="chip" data-min="120">2h</button>
+        <button class="chip" data-min="160">2h 40min</button>
+        <button class="chip" data-min="200">3h 20min</button>
+        <button class="chip" data-min="240">4h</button>
+      </div>
+      <button class="btn-confirm" id="confirm-btn">Ingresar</button>
+      <p class="countdown-hint" id="countdown-hint"></p>
+    </div>
+  </div>
 
   <div class="card">
     <div class="logo-mark">
@@ -243,6 +347,61 @@
       statusEl.className = 'status' + (cls ? ' ' + cls : '');
     }
 
+    // ---- Duration picker ----
+    var pendingRedirect = null;
+    var countdownTimer  = null;
+
+    function showPicker(redirectUrl) {
+      pendingRedirect = redirectUrl;
+      document.getElementById('picker-overlay').classList.add('visible');
+      startCountdown();
+    }
+
+    function startCountdown() {
+      var secs = 5;
+      var hint = document.getElementById('countdown-hint');
+      hint.textContent = 'Confirma en ' + secs + 's con la duración seleccionada…';
+      countdownTimer = setInterval(function () {
+        secs--;
+        if (secs > 0) {
+          hint.textContent = 'Confirma en ' + secs + 's con la duración seleccionada…';
+        } else {
+          clearInterval(countdownTimer);
+          confirmSession();
+        }
+      }, 1000);
+    }
+
+    function confirmSession() {
+      clearInterval(countdownTimer);
+      var activeChip = document.querySelector('.chip.active');
+      var minutes    = activeChip ? parseInt(activeChip.dataset.min, 10) : 40;
+      var expiresAt  = Date.now() + minutes * 60 * 1000;
+
+      // Notificar al Service Worker para interceptar navegación al expirar
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'KIOSK_SESSION', expiresAt: expiresAt });
+      }
+
+      // Backup: auto-logout via setTimeout (en la misma pestaña)
+      setTimeout(function () { window.location.href = '/logout'; }, minutes * 60 * 1000);
+
+      window.location.href = pendingRedirect;
+    }
+
+    // Chip selection: cancela el countdown, requiere confirmar manualmente
+    document.getElementById('chips').addEventListener('click', function (e) {
+      var chip = e.target.closest('.chip');
+      if (!chip) return;
+      document.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
+      chip.classList.add('active');
+      clearInterval(countdownTimer);
+      document.getElementById('countdown-hint').textContent = '';
+    });
+
+    document.getElementById('confirm-btn').addEventListener('click', confirmSession);
+    // ---- /Duration picker ----
+
     async function authenticate(uid) {
       setStatus('Verificando…');
       uidEl.textContent = '';
@@ -250,8 +409,8 @@
         const r    = await fetch('/auth', { method: 'POST', body: new URLSearchParams({ uid }) });
         const data = await r.json();
         if (data.ok) {
-          setStatus('Bienvenido. Abriendo archivos…', 'ok');
-          window.location.href = data.redirect;
+          setStatus('Bienvenido' + (data.user ? ', ' + data.user : '') + '. Seleccioná la duración.', 'ok');
+          showPicker(data.redirect);
         } else if (r.status === 404) {
           setStatus('Tarjeta no registrada', 'err');
           uidEl.textContent = 'UID: ' + (data.uid || uid);
@@ -298,58 +457,32 @@
     });
 
     // ---- Captura global de teclas HID (fase captura = antes que cualquier elemento) ----
-    // El lector USB puede enviar caracteres antes de que el intervalo de 100 ms
+    // El lector USB puede enviar caracteres antes de que el intervalo de 100ms
     // devuelva el foco a catcher. Este listener los intercepta y los redirige.
-    (function () {
-      // Overlay de debug: muestra las últimas teclas con estado de foco.
-      // Quitar cuando el problema esté resuelto.
-      var dbg = document.createElement('div');
-      dbg.style.cssText =
-        'position:fixed;bottom:2.2rem;right:.4rem;width:220px;' +
-        'background:rgba(0,0,0,.78);color:#0f0;font:8px monospace;' +
-        'padding:4px 5px;border-radius:4px;z-index:9999;pointer-events:none;' +
-        'white-space:pre-wrap;line-height:1.5;max-height:140px;overflow:hidden';
-      document.body.appendChild(dbg);
-      var dbgLines = [];
-      function dbgAdd(msg) {
-        dbgLines.push(msg);
-        if (dbgLines.length > 10) dbgLines.shift();
-        dbg.textContent = dbgLines.join('\n');
+    document.addEventListener('keydown', function (e) {
+      var active    = document.activeElement;
+      var isCatcher = (active === catcher);
+      var tag       = active ? active.tagName : 'NONE';
+      var isRealInput = !isCatcher &&
+        (tag === 'INPUT' || tag === 'TEXTAREA' ||
+         (active && active.isContentEditable));
+
+      if (isCatcher) return;
+      if (isRealInput) return;
+
+      if (e.key === 'Enter') {
+        var uid = normalizeUid(catcher.value.trim());
+        catcher.value = '';
+        if (uid.length >= 4) authenticate(uid);
+        e.preventDefault();
+      } else if (e.key.length === 1) {
+        catcher.value += e.key;
+        e.preventDefault();
+      } else if (e.key === 'Backspace') {
+        catcher.value = catcher.value.slice(0, -1);
+        e.preventDefault();
       }
-      dbgAdd('HID debug activo');
-
-      document.addEventListener('keydown', function (e) {
-        var active = document.activeElement;
-        var isCatcher = (active === catcher);
-        var tag = active ? active.tagName : 'NONE';
-        var isRealInput = !isCatcher &&
-          (tag === 'INPUT' || tag === 'TEXTAREA' ||
-           (active && active.isContentEditable));
-        var t = String(Date.now() % 100000).padStart(5, '0');
-
-        dbgAdd(t + ' [' + e.key + '] @' + (isCatcher ? 'CATCHER' : tag.toLowerCase()));
-
-        // catcher ya tiene foco: el listener de catcher lo maneja
-        if (isCatcher) return;
-        // input real de Nextcloud: no interferir
-        if (isRealInput) return;
-
-        // Sin foco útil: acumular en catcher.value y disparar en Enter
-        if (e.key === 'Enter') {
-          var uid = normalizeUid(catcher.value.trim());
-          catcher.value = '';
-          dbgAdd('→ ENTER uid=' + uid + ' (' + uid.length + 'c)');
-          if (uid.length >= 4) authenticate(uid);
-          e.preventDefault();
-        } else if (e.key.length === 1) {
-          catcher.value += e.key;
-          e.preventDefault();
-        } else if (e.key === 'Backspace') {
-          catcher.value = catcher.value.slice(0, -1);
-          e.preventDefault();
-        }
-      }, true); // true = fase de captura, antes que cualquier elemento
-    })();
+    }, true); // true = fase de captura
 
     // Web NFC (Chrome Android 89+) — si está disponible, aparece botón para activarlo
     if ('NDEFReader' in window) {

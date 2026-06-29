@@ -26,7 +26,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "11"
+VERSION              = "12"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -313,6 +313,8 @@ def index():
 
 
 @app.route("/auth", methods=["POST"])
+@limiter.limit("30 per minute",
+               error_message="Demasiados intentos. Esperá un momento.")
 def auth():
     uid = (request.form.get("uid") or "").strip()
     if not uid:
@@ -435,12 +437,24 @@ def nextcloud_catch(subpath):
 def sw_kiosk_js():
     js = """\
 // Kiosko SW permanente - La Nube NFC
+let _kioskExpires = 0;
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))));
 });
 self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
-self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request)); });
+self.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'KIOSK_SESSION') {
+        _kioskExpires = e.data.expiresAt || 0;
+    }
+});
+self.addEventListener('fetch', (e) => {
+    if (e.request.mode === 'navigate' && _kioskExpires && Date.now() > _kioskExpires) {
+        e.respondWith(Response.redirect('/', 302));
+        return;
+    }
+    e.respondWith(fetch(e.request));
+});
 """
     resp = make_response(js)
     resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
