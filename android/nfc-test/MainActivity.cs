@@ -55,8 +55,8 @@ public class MainActivity : Activity
 
     private void UpdatePoll()
     {
-        _tvPoll.Text =
-            $"reads={NfcKit.ReadCount}  ready={NfcKit.IsReady}\n" +
-            $"uid: {(string.IsNullOrEmpty(NfcKit.LastUid) ? \"---\" : NfcKit.LastUid)}";
+        string uid = string.IsNullOrEmpty(NfcKit.LastUid) ? "---" : NfcKit.LastUid;
+        _tvPoll.Text = $"reads={NfcKit.ReadCount}  ready={NfcKit.IsReady}\n" +
+                       $"uid: {uid}";
     }
 }
