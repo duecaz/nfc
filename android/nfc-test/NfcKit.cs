@@ -7,13 +7,20 @@ namespace NfcTest;
 
 internal static class NfcKit
 {
-    private const string Tag     = "NfcKit";
+    private const string Tag    = "NfcKit";
     private const int    RegAddr = 0x21;
     private const int    PollMs  = 500;
 
-    public static bool UseV2Chipset = false;
-    public static int  I2cAddr     = 0xA2;
-    public static string InitError  = "";
+    public static bool   UseV2Chipset = false;
+    public static int    I2cAddr      = 0xA2;
+    public static string LastError    = "(ninguno)";
+    public static int    ReadCount    = 0;
+    public static int    LastRet      = -99;
+    public static string LastBuf      = "";
+    public static string LastUid      = "";
+
+    // Pasos de inicializacion (para mostrar en pantalla)
+    public static readonly List<string> Steps = new();
 
     private static int InitBus => UseV2Chipset ? 7 : 6;
     private static int ReadBus => UseV2Chipset ? 7 : 4;
@@ -26,36 +33,68 @@ internal static class NfcKit
     private static IntPtr _initMid = IntPtr.Zero;
     private static IntPtr _readMid = IntPtr.Zero;
 
+    private static void Step(string msg)
+    {
+        Log.Debug(Tag, msg);
+        lock (Steps) { Steps.Add(msg); }
+    }
+
     public static void Init(Context ctx)
     {
+        Steps.Clear();
+        Step("[1] Init() arranca");
+
         try
         {
             int s = Settings.Global.GetInt(ctx.ContentResolver, "dazzle_nfc_i2c_addr", 6);
             I2cAddr = s switch { 6 => 0xA6, 8 => 0xA8, _ => 0xA2 };
-        }
-        catch { }
-
-        try
-        {
-            var cls = JNIEnv.FindClass("com/droidlogic/app/tv/TvControlManager");
-
-            var getInstId = JNIEnv.GetStaticMethodID(cls,
-                "getInstance", "()Lcom/droidlogic/app/tv/TvControlManager;");
-            var localMgr = JNIEnv.CallStaticObjectMethod(cls, getInstId);
-            _mgrRef = JNIEnv.NewGlobalRef(localMgr);
-            JNIEnv.DeleteLocalRef(localMgr);
-
-            _initMid = JNIEnv.GetMethodID(cls, "i2c_init", "(I)V");
-            _readMid = JNIEnv.GetMethodID(cls, "i2c_read", "(IIII[I)I");
-            JNIEnv.DeleteLocalRef(cls);
-
-            JNIEnv.CallVoidMethod(_mgrRef, _initMid, new JValue[] { new JValue(InitBus) });
-            InitError = "";
+            Step($"[2] dazzle_nfc_i2c_addr={s}  I2cAddr=0x{I2cAddr:X2}");
         }
         catch (Exception ex)
         {
+            Step($"[2] Settings ERROR: {ex.Message}  -> I2cAddr=0x{I2cAddr:X2} (default)");
+        }
+
+        try
+        {
+            Step("[3] FindClass com/droidlogic/app/tv/TvControlManager...");
+            var cls = JNIEnv.FindClass("com/droidlogic/app/tv/TvControlManager");
+            Step($"[3] FindClass OK  cls=0x{cls:X}");
+
+            Step("[4] GetStaticMethodID getInstance...");
+            var getInstId = JNIEnv.GetStaticMethodID(cls,
+                "getInstance", "()Lcom/droidlogic/app/tv/TvControlManager;");
+            Step($"[4] GetStaticMethodID OK  id=0x{getInstId:X}");
+
+            Step("[5] CallStaticObjectMethod (getInstance)...");
+            var localMgr = JNIEnv.CallStaticObjectMethod(cls, getInstId);
+            Step($"[5] getInstance OK  obj=0x{localMgr:X}");
+
+            _mgrRef = JNIEnv.NewGlobalRef(localMgr);
+            JNIEnv.DeleteLocalRef(localMgr);
+
+            Step("[6] GetMethodID i2c_init...");
+            _initMid = JNIEnv.GetMethodID(cls, "i2c_init", "(I)V");
+            Step($"[6] i2c_init methodID OK  0x{_initMid:X}");
+
+            Step("[7] GetMethodID i2c_read...");
+            _readMid = JNIEnv.GetMethodID(cls, "i2c_read", "(IIII[I)I");
+            Step($"[7] i2c_read methodID OK  0x{_readMid:X}");
+
+            JNIEnv.DeleteLocalRef(cls);
+
+            Step($"[8] Llamando i2c_init(bus={InitBus})...");
+            JNIEnv.CallVoidMethod(_mgrRef, _initMid, new JValue[] { new JValue(InitBus) });
+            Step($"[8] i2c_init({InitBus}) OK");
+
+            Step($"[9] LISTO. readBus={ReadBus}  i2cAddr=0x{I2cAddr:X2}");
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
             _mgrRef   = IntPtr.Zero;
-            InitError = ex.Message;
+            Step($"[ERR] EXCEPCION: {ex.GetType().Name}: {ex.Message}");
+            Log.Error(Tag, $"Init FAILED: {ex}");
         }
     }
 
@@ -66,7 +105,8 @@ internal static class NfcKit
 
     public static void StartReadJob()
     {
-        if (_running || _mgrRef == IntPtr.Zero) return;
+        if (_running || _mgrRef == IntPtr.Zero) { Step($"[POLL] StartReadJob skip: running={_running} mgr={_mgrRef:X}"); return; }
+        Step("[POLL] Iniciando hilo de lectura...");
         _running = true;
         _thread  = new Thread(ReadLoop) { IsBackground = true, Name = "NfcKit-Poll" };
         _thread.Start();
@@ -76,10 +116,17 @@ internal static class NfcKit
 
     private static void ReadLoop()
     {
+        int n = 0;
         while (_running)
         {
             var uid = ReadCard();
-            if (!string.IsNullOrEmpty(uid)) _onCard?.Invoke(uid);
+            n++;
+            if (n % 10 == 0) Log.Debug(Tag, $"[POLL] heartbeat #{n}  lastRet={LastRet}  lastBuf={LastBuf}");
+            if (!string.IsNullOrEmpty(uid))
+            {
+                LastUid = uid;
+                _onCard?.Invoke(uid);
+            }
             Thread.Sleep(PollMs);
         }
     }
@@ -99,13 +146,24 @@ internal static class NfcKit
                     new JValue(RegAddr), new JValue(5),
                     new JValue(jBuf)
                 });
-                if (ret != 0) return "";
+                LastRet = ret;
                 JNIEnv.CopyArray(jBuf, tmp);
+                LastBuf = string.Join(",", tmp.Take(6).Select(b => $"0x{b:X2}"));
+
+                if (ret != 0) return "";
+
                 var uid = string.Concat(tmp.Take(4).Select(b => (b & 0xFF).ToString("X2")));
+                ReadCount++;
                 return uid == "00000000" ? "" : uid;
             }
             finally { JNIEnv.DeleteLocalRef(jBuf); }
         }
-        catch { return ""; }
+        catch (Exception ex)
+        {
+            LastRet = -1;
+            LastBuf = $"EX: {ex.Message}";
+            Log.Error(Tag, $"ReadCard ex: {ex.Message}");
+            return "";
+        }
     }
 }
