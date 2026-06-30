@@ -9,7 +9,7 @@ internal static class NfcKit
 {
     private const string Tag     = "NfcKit";
     private const int    RegAddr = 0x21;
-    private const int    PollMs  = 500;
+    private const int    PollMs  = 200;
 
     public static bool UseV2Chipset = false;
     public static int  I2cAddr     = 0xA6;
@@ -23,7 +23,6 @@ internal static class NfcKit
     private static          bool            _ready;
 
     private static IntPtr _cls        = IntPtr.Zero;
-    private static IntPtr _initMethod = IntPtr.Zero;
     private static IntPtr _readMethod = IntPtr.Zero;
 
     public static void Init(Context ctx)
@@ -37,12 +36,19 @@ internal static class NfcKit
 
         try
         {
-            _cls        = JNIEnv.FindClass("uno/lanube/kiosk/NfcBridge");
-            _initMethod = JNIEnv.GetStaticMethodID(_cls, "i2cInit", "(I)V");
-            _readMethod = JNIEnv.GetStaticMethodID(_cls, "readUid", "(III)Ljava/lang/String;");
-            JNIEnv.CallStaticVoidMethod(_cls, _initMethod, new JValue(InitBus));
-            _ready = true;
-            Log.Info(Tag, $"NfcBridge OK  initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
+            _cls = JNIEnv.FindClass("uno/lanube/kiosk/NfcBridge");
+            IntPtr loadM = JNIEnv.GetStaticMethodID(_cls, "load", "(Landroid/content/Context;I)V");
+            _readMethod  = JNIEnv.GetStaticMethodID(_cls, "readUid", "(III)Ljava/lang/String;");
+            JNIEnv.CallStaticVoidMethod(_cls, loadM, new JValue(ctx), new JValue(InitBus));
+
+            IntPtr statusM = JNIEnv.GetStaticMethodID(_cls, "getStatus", "()Ljava/lang/String;");
+            IntPtr sp = JNIEnv.CallStaticObjectMethod(_cls, statusM);
+            string status = sp == IntPtr.Zero
+                ? ""
+                : (JNIEnv.GetString(sp, JniHandleOwnership.TransferLocalRef) ?? "");
+
+            _ready = status.StartsWith("OK");
+            Log.Info(Tag, $"NfcBridge {status}  initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
         }
         catch (Exception ex)
         {
@@ -70,7 +76,7 @@ internal static class NfcKit
         while (_running)
         {
             var uid = ReadCard();
-            if (++n % 20 == 0) Log.Debug(Tag, $"heartbeat #{n}");
+            if (++n % 25 == 0) Log.Debug(Tag, $"heartbeat #{n}");
             if (!string.IsNullOrEmpty(uid)) _onCard?.Invoke(uid);
             Thread.Sleep(PollMs);
         }
