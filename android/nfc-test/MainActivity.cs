@@ -22,8 +22,6 @@ public class MainActivity : Activity
         _tvUid   = FindViewById<TextView>(Resource.Id.tvUid)!;
 
         NfcKit.Init(this);
-
-        // Mostrar pasos de init inmediatamente
         UpdateSteps();
     }
 
@@ -33,7 +31,6 @@ public class MainActivity : Activity
         NfcKit.Register(uid => RunOnUiThread(() => _tvUid.Text = uid));
         NfcKit.StartReadJob();
 
-        // Actualizar pantalla cada 500ms con estado del poll
         _timer = new System.Timers.Timer(500);
         _timer.Elapsed += (_, _) => RunOnUiThread(UpdatePoll);
         _timer.Start();
@@ -59,8 +56,7 @@ public class MainActivity : Activity
     private void UpdatePoll()
     {
         _tvPoll.Text =
-            $"reads={NfcKit.ReadCount}  ret={NfcKit.LastRet}\n" +
-            $"buf: {NfcKit.LastBuf}\n" +
-            $"uid: {(string.IsNullOrEmpty(NfcKit.LastUid) ? "---" : NfcKit.LastUid)}";
+            $"reads={NfcKit.ReadCount}  ready={NfcKit.IsReady}\n" +
+            $"uid: {(string.IsNullOrEmpty(NfcKit.LastUid) ? \"---\" : NfcKit.LastUid)}";
     }
 }
