@@ -12,7 +12,7 @@ internal static class NfcKit
     private const int    PollMs  = 500;
 
     public static bool UseV2Chipset = false;
-    public static int  I2cAddr     = 0xA6;  // panel: dazzle_nfc_i2c_addr=6 -> 0xA6
+    public static int  I2cAddr     = 0xA6;
 
     private static int InitBus => UseV2Chipset ? 7 : 6;
     private static int ReadBus => UseV2Chipset ? 7 : 4;
@@ -20,7 +20,11 @@ internal static class NfcKit
     private static volatile bool            _running;
     private static          Thread?         _thread;
     private static          Action<string>? _onCard;
-    private static          AndroidJavaClass? _bridge;
+    private static          bool            _ready;
+
+    private static IntPtr _cls        = IntPtr.Zero;
+    private static IntPtr _initMethod = IntPtr.Zero;
+    private static IntPtr _readMethod = IntPtr.Zero;
 
     public static void Init(Context ctx)
     {
@@ -33,13 +37,16 @@ internal static class NfcKit
 
         try
         {
-            _bridge = new AndroidJavaClass("uno.lanube.kiosk.NfcBridge");
-            _bridge.CallStatic("i2cInit", InitBus);
+            _cls        = JNIEnv.FindClass("uno/lanube/kiosk/NfcBridge");
+            _initMethod = JNIEnv.GetStaticMethodID(_cls, "i2cInit", "(I)V");
+            _readMethod = JNIEnv.GetStaticMethodID(_cls, "readUid", "(III)Ljava/lang/String;");
+            JNIEnv.CallStaticVoidMethod(_cls, _initMethod, new JValue(InitBus));
+            _ready = true;
             Log.Info(Tag, $"NfcBridge OK  initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
         }
         catch (Exception ex)
         {
-            _bridge = null;
+            _ready = false;
             Log.Warn(Tag, $"NfcBridge no disponible: {ex.Message}");
         }
     }
@@ -49,7 +56,7 @@ internal static class NfcKit
 
     public static void StartReadJob()
     {
-        if (_running || _bridge == null) return;
+        if (_running || !_ready) return;
         _running = true;
         _thread  = new Thread(ReadLoop) { IsBackground = true, Name = "NfcKit-Poll" };
         _thread.Start();
@@ -71,10 +78,13 @@ internal static class NfcKit
 
     private static string ReadCard()
     {
-        if (_bridge == null) return "";
+        if (!_ready) return "";
         try
         {
-            return _bridge.CallStatic<string>("readUid", ReadBus, I2cAddr, RegAddr) ?? "";
+            IntPtr jstr = JNIEnv.CallStaticObjectMethod(_cls, _readMethod,
+                new JValue(ReadBus), new JValue(I2cAddr), new JValue(RegAddr));
+            if (jstr == IntPtr.Zero) return "";
+            return JNIEnv.GetString(jstr, JniHandleOwnership.TransferLocalRef) ?? "";
         }
         catch (Exception ex)
         {
