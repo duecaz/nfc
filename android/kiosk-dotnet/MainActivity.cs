@@ -21,9 +21,9 @@ public class MainActivity : Activity
     private DownloadReceiver? _downloadReceiver;
     private readonly System.Collections.Generic.HashSet<long> _activeDownloads = new();
 
-    private const string KioskUrl   = "https://lanube.uno";
-    private const string LogTag     = "LaNubeKiosk";
-    private const string ApkVersion = "4";
+    private const string KioskUrl       = "https://lanube.uno";
+    private const string LogTag         = "LaNubeKiosk";
+    private const string ApkVersion     = "5";
     private const int    FileChooserCode = 1001;
 
     protected override void OnCreate(Bundle? savedInstanceState)
@@ -52,7 +52,8 @@ public class MainActivity : Activity
         webView.LoadUrl(KioskUrl);
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
-        Android.Util.Log.Debug(LogTag, $"APK v{ApkVersion} iniciado. NFC: {(nfcAdapter != null ? "OK" : "NO")}");
+        NfcKit.Init(this);  // I2C panel NFC (Amlogic/Droidlogic)
+        Android.Util.Log.Debug(LogTag, $"APK v{ApkVersion} iniciado. NFC-std: {(nfcAdapter != null ? "OK" : "NO")}");
 
         _downloadReceiver = new DownloadReceiver(this);
         var dlFilter = new IntentFilter(DownloadManager.ActionDownloadComplete);
@@ -98,22 +99,34 @@ public class MainActivity : Activity
     protected override void OnResume()
     {
         base.OnResume();
-        if (nfcAdapter == null) return;
-        var intent = new Intent(this, typeof(MainActivity));
-        intent.AddFlags(ActivityFlags.SingleTop);
+
+        // Standard Android NFC (USB readers, regular phones/tablets)
+        if (nfcAdapter != null)
+        {
+            var intent = new Intent(this, typeof(MainActivity));
+            intent.AddFlags(ActivityFlags.SingleTop);
 #pragma warning disable CA1416
-        var flags = Build.VERSION.SdkInt >= BuildVersionCodes.S
-            ? PendingIntentFlags.Mutable
-            : (PendingIntentFlags)0;
+            var flags = Build.VERSION.SdkInt >= BuildVersionCodes.S
+                ? PendingIntentFlags.Mutable
+                : (PendingIntentFlags)0;
 #pragma warning restore CA1416
-        var pending = PendingIntent.GetActivity(this, 0, intent, flags);
-        nfcAdapter.EnableForegroundDispatch(this, pending, null, null);
+            var pending = PendingIntent.GetActivity(this, 0, intent, flags);
+            nfcAdapter.EnableForegroundDispatch(this, pending, null, null);
+        }
+
+        // I2C panel NFC (Amlogic/Droidlogic panels with built-in NFC reader)
+        NfcKit.Register(uid => RunOnUiThread(() =>
+            webView.EvaluateJavascript(
+                $"if(typeof authenticate==='function')authenticate('{uid}')", null)));
+        NfcKit.StartReadJob();
     }
 
     protected override void OnPause()
     {
         base.OnPause();
         nfcAdapter?.DisableForegroundDispatch(this);
+        NfcKit.StopReadJob();
+        NfcKit.Unregister();
     }
 
     protected override void OnNewIntent(Intent? intent)
@@ -196,7 +209,6 @@ public class MainActivity : Activity
             {
                 Android.Net.Uri? contentUri = null;
 
-                // FileProvider convierte file:// en content:// con permisos r+w
                 if (!string.IsNullOrEmpty(localUriStr))
                 {
                     var localPath = Android.Net.Uri.Parse(localUriStr)?.Path;
@@ -211,7 +223,6 @@ public class MainActivity : Activity
                     }
                 }
 
-                // fallback: URI del DownloadManager (solo lectura, puede fallar en WPS)
                 if (contentUri == null)
                 {
                     var baseUri = Android.Net.Uri.Parse("content://downloads/public_downloads");
