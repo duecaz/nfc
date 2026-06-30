@@ -1,31 +1,27 @@
 using Android.Content;
 using Android.Provider;
+using Android.Runtime;
 using Android.Util;
-using Com.Droidlogic.App.TV;   // namespace generado por binding de libs\classes.jar (TV en mayusculas)
 
 namespace LaNubeKiosk;
 
-/// <summary>
-/// Lector NFC I2C para paneles Amlogic/Droidlogic.
-/// Usa TvControlManager del JAR del programador (classes.jar).
-/// La implementacion real se carga desde /system/framework/droidlogic.jar del dispositivo.
-///
-/// API exacta (javap):
-///   public static TvControlManager getInstance()    ->  TvControlManager.GetInstance()
-///   public void  i2c_init(int bus)                  ->  I2cInit(int)
-///   public int   i2c_read(int,int,int,int,int[])    ->  I2cRead(int,int,int,int,int[])
-/// </summary>
+// Lee NFC via TvControlManager de Amlogic/Droidlogic usando JNI directo.
+// La implementacion real esta en /system/framework/droidlogic.jar del panel.
+// Metodos Java confirmados con javap:
+//   public static TvControlManager getInstance()           -> JNI: ()Lcom/droidlogic/app/tv/TvControlManager;
+//   public void  i2c_init(int bus)                         -> JNI: (I)V
+//   public int   i2c_read(int bus,int addr,int reg,int n,int[] buf)  -> JNI: (IIII[I)I
 internal static class NfcKit
 {
     private const string Tag     = "NfcKit";
-    private const int    RegAddr = 0x21;   // REGADDR_CARD_READ
+    private const int    RegAddr = 0x21;  // REGADDR_CARD_READ
     private const int    PollMs  = 500;
 
-    // Chipset normal: i2c_init(bus=6), i2c_read(bus=4)  - patron del NfcKit.kt original
+    // Chipset normal: i2c_init(bus=6), i2c_read(bus=4)  -- patron original NfcKit.kt
     // RK3576v2:       ambos buses = 7
     public static bool UseV2Chipset = false;
 
-    // Direccion I2C: 0xA2 por defecto, sobreescrito desde Settings del sistema en Init()
+    // Direccion I2C leida de Settings en Init()
     public static int I2cAddr = 0xA2;
 
     private static int InitBus => UseV2Chipset ? 7 : 6;
@@ -34,7 +30,11 @@ internal static class NfcKit
     private static volatile bool            _running;
     private static          Thread?         _thread;
     private static          Action<string>? _onCard;
-    private static          TvControlManager? _mgr;
+
+    // JNI handles -- validos mientras el proceso vive
+    private static IntPtr _mgrRef  = IntPtr.Zero;
+    private static IntPtr _initMid = IntPtr.Zero;
+    private static IntPtr _readMid = IntPtr.Zero;
 
     public static void Init(Context ctx)
     {
@@ -44,21 +44,29 @@ internal static class NfcKit
             I2cAddr = s switch { 6 => 0xA6, 8 => 0xA8, _ => 0xA2 };
             Log.Info(Tag, $"dazzle_nfc_i2c_addr={s}  i2c_addr=0x{I2cAddr:X2}");
         }
-        catch (Exception ex)
-        {
-            Log.Warn(Tag, $"No se pudo leer dazzle_nfc_i2c_addr: {ex.Message}");
-        }
+        catch (Exception ex) { Log.Warn(Tag, $"dazzle_nfc_i2c_addr: {ex.Message}"); }
 
         try
         {
-            _mgr = TvControlManager.GetInstance();
-            _mgr?.I2cInit(InitBus);
-            Log.Info(Tag, $"TvControlManager OK - initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
+            var cls = JNIEnv.FindClass("com/droidlogic/app/tv/TvControlManager");
+
+            var getInstId = JNIEnv.GetStaticMethodID(cls,
+                "getInstance", "()Lcom/droidlogic/app/tv/TvControlManager;");
+            var localMgr = JNIEnv.CallStaticObjectMethod(cls, getInstId);
+            _mgrRef = JNIEnv.NewGlobalRef(localMgr);
+            JNIEnv.DeleteLocalRef(localMgr);
+
+            _initMid = JNIEnv.GetMethodID(cls, "i2c_init", "(I)V");
+            _readMid = JNIEnv.GetMethodID(cls, "i2c_read", "(IIII[I)I");
+            JNIEnv.DeleteLocalRef(cls);
+
+            JNIEnv.CallVoidMethod(_mgrRef, _initMid, new JValue[] { new JValue(InitBus) });
+            Log.Info(Tag, $"TvControlManager JNI OK - initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
         }
         catch (Exception ex)
         {
+            _mgrRef = IntPtr.Zero;
             Log.Warn(Tag, $"TvControlManager no disponible: {ex.Message}");
-            _mgr = null;
         }
     }
 
@@ -67,7 +75,7 @@ internal static class NfcKit
 
     public static void StartReadJob()
     {
-        if (_running || _mgr == null) return;
+        if (_running || _mgrRef == IntPtr.Zero) return;
         _running = true;
         _thread  = new Thread(ReadLoop) { IsBackground = true, Name = "NfcKit-Poll" };
         _thread.Start();
@@ -89,16 +97,30 @@ internal static class NfcKit
 
     private static string ReadCard()
     {
-        if (_mgr == null) return "";
+        if (_mgrRef == IntPtr.Zero || _readMid == IntPtr.Zero) return "";
         try
         {
-            var buf = new int[6];
-            int ret  = _mgr.I2cRead(ReadBus, I2cAddr, RegAddr, 5, buf);
-            if (ret != 0) return "";
+            int[] tmp  = new int[6];
+            var   jBuf = JNIEnv.NewArray(tmp);  // crea Java int[] de 6 ceros
+            try
+            {
+                int ret = JNIEnv.CallIntMethod(_mgrRef, _readMid, new JValue[]
+                {
+                    new JValue(ReadBus),
+                    new JValue(I2cAddr),
+                    new JValue(RegAddr),
+                    new JValue(5),
+                    new JValue(jBuf)
+                });
+                if (ret != 0) return "";
 
-            // 4 bytes -> 8 chars hex mayuscula con padding, ej: "D779CD0A"
-            var uid = string.Concat(buf.Take(4).Select(b => (b & 0xFF).ToString("X2")));
-            return uid == "00000000" ? "" : uid;
+                JNIEnv.CopyArray(jBuf, tmp);  // copia resultados de Java a C#
+
+                // 4 bytes -> 8 chars hex mayuscula, ej: "D779CD0A"
+                var uid = string.Concat(tmp.Take(4).Select(b => (b & 0xFF).ToString("X2")));
+                return uid == "00000000" ? "" : uid;
+            }
+            finally { JNIEnv.DeleteLocalRef(jBuf); }
         }
         catch (Exception ex)
         {

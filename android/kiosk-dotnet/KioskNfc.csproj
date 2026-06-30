@@ -15,9 +15,4 @@
     <PackageReference Include="Xamarin.AndroidX.Core" Version="1.15.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <AndroidJavaLibrary Include="libs\classes.jar" />
-    <TransformFile Include="Transforms\Metadata.xml" />
-  </ItemGroup>
-
 </Project>
