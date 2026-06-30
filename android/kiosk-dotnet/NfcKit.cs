@@ -1,36 +1,31 @@
 using Android.Content;
 using Android.Provider;
 using Android.Util;
-using Com.Droidlogic.App.Tv;   // generado por el binding de libs\classes.jar
+using Com.Droidlogic.App.TV;   // namespace generado por binding de libs\classes.jar (TV en mayusculas)
 
 namespace LaNubeKiosk;
 
 /// <summary>
 /// Lector NFC I2C para paneles Amlogic/Droidlogic.
-/// Usa TvControlManager del JAR del programador (classes.jar) cargado
-/// en tiempo de ejecución desde /system/framework/droidlogic.jar del dispositivo.
+/// Usa TvControlManager del JAR del programador (classes.jar).
+/// La implementacion real se carga desde /system/framework/droidlogic.jar del dispositivo.
 ///
-/// API exacta del JAR (javap):
-///   public static TvControlManager getInstance()
-///   public void i2c_init(int bus)
-///   public int  i2c_read(int bus, int addr, int reg, int count, int[] out)
-///
-/// Bindings C# generados por .NET Android:
-///   TvControlManager.GetInstance()           ← si no compila, probar .Instance
-///   manager.I2cInit(int)
-///   manager.I2cRead(int, int, int, int, int[])
+/// API exacta (javap):
+///   public static TvControlManager getInstance()    ->  TvControlManager.GetInstance()
+///   public void  i2c_init(int bus)                  ->  I2cInit(int)
+///   public int   i2c_read(int,int,int,int,int[])    ->  I2cRead(int,int,int,int,int[])
 /// </summary>
 internal static class NfcKit
 {
-    private const string Tag    = "NfcKit";
+    private const string Tag     = "NfcKit";
     private const int    RegAddr = 0x21;   // REGADDR_CARD_READ
     private const int    PollMs  = 500;
 
-    // RK3576v2 (chipset nuevo): ambos buses = 7
-    // Chipset normal:           init=6, read=4  (patrón del NfcKit.kt original)
+    // Chipset normal: i2c_init(bus=6), i2c_read(bus=4)  - patron del NfcKit.kt original
+    // RK3576v2:       ambos buses = 7
     public static bool UseV2Chipset = false;
 
-    // i2c_addr: 0xA2 por defecto, sobreescrito en Init() desde Settings del sistema
+    // Direccion I2C: 0xA2 por defecto, sobreescrito desde Settings del sistema en Init()
     public static int I2cAddr = 0xA2;
 
     private static int InitBus => UseV2Chipset ? 7 : 6;
@@ -43,7 +38,6 @@ internal static class NfcKit
 
     public static void Init(Context ctx)
     {
-        // Leer dirección I2C del setting del sistema
         try
         {
             int s = Settings.Global.GetInt(ctx.ContentResolver, "dazzle_nfc_i2c_addr", 6);
@@ -55,17 +49,14 @@ internal static class NfcKit
             Log.Warn(Tag, $"No se pudo leer dazzle_nfc_i2c_addr: {ex.Message}");
         }
 
-        // Obtener instancia y hacer init del bus I2C
         try
         {
-            // Si 'GetInstance()' no compila, probar: TvControlManager.Instance
             _mgr = TvControlManager.GetInstance();
             _mgr?.I2cInit(InitBus);
-            Log.Info(Tag, $"TvControlManager OK — initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
+            Log.Info(Tag, $"TvControlManager OK - initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
         }
         catch (Exception ex)
         {
-            // En dispositivos sin droidlogic.jar (móviles normales) falla silenciosamente
             Log.Warn(Tag, $"TvControlManager no disponible: {ex.Message}");
             _mgr = null;
         }
@@ -105,7 +96,7 @@ internal static class NfcKit
             int ret  = _mgr.I2cRead(ReadBus, I2cAddr, RegAddr, 5, buf);
             if (ret != 0) return "";
 
-            // 4 bytes → 8 chars hex mayúscula con padding, ej: "D779CD0A"
+            // 4 bytes -> 8 chars hex mayuscula con padding, ej: "D779CD0A"
             var uid = string.Concat(buf.Take(4).Select(b => (b & 0xFF).ToString("X2")));
             return uid == "00000000" ? "" : uid;
         }

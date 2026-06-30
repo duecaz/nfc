@@ -1,14 +1,18 @@
 <metadata>
   <!--
-    El classes.jar contiene el SDK TV completo de Amlogic.
-    Solo necesitamos TvControlManager para leer NFC via I2C.
-    Estas clases tienen errores en la generacion de bindings C# y no las usamos.
+    Solo necesitamos TvControlManager (i2c_init + i2c_read) para NFC.
+    Excluir todo lo demas elimina los errores y warnings de binding.
   -->
 
-  <!-- CS0535: Program no implementa IComparable.CompareTo -->
-  <remove-node path="/api/package[@name='com.droidlogic.app.tv']/class[@name='Program']" />
+  <!-- Paquetes completos que no usamos -->
+  <remove-node path="/api/package[@name='rockchip.hardware.dazzle.v1_0']" />
+  <remove-node path="/api/package[@name='rockchip.hardware.hdmi.v1_0']" />
+  <remove-node path="/api/package[@name='android.hidl.base.v1_0']" />
+  <remove-node path="/api/package[@name='vendor.amlogic.hardware.tvserver.v1_0']" />
+  <remove-node path="/api/package[@name='com.droidlogic.tvinput.services']" />
 
-  <!-- CS0534/CS0535: TvDataBaseManager inner classes no implementan Comparator/AsyncTask -->
-  <remove-node path="/api/package[@name='com.droidlogic.app.tv']/class[@name='TvDataBaseManager']" />
+  <!-- Dentro de com.droidlogic.app.tv: solo TvControlManager -->
+  <remove-node path="/api/package[@name='com.droidlogic.app.tv']/class[@name!='TvControlManager']" />
+  <remove-node path="/api/package[@name='com.droidlogic.app.tv']/interface" />
 
 </metadata>
