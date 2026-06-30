@@ -5,28 +5,39 @@ using Android.Util;
 
 namespace LaNubeKiosk;
 
+/// <summary>
+/// Lectura NFC del panel (chip I2C via droidlogic.jar real, cargado en runtime
+/// con DexClassLoader por NfcBridge.java). Ver android/NFC-Droidlogic.md.
+/// </summary>
 internal static class NfcKit
 {
-    private const string Tag     = "NfcKit";
-    private const int    RegAddr = 0x21;
-    private const int    PollMs  = 200;
+    private const string Tag        = "NfcKit";
+    private const int    RegAddr    = 0x21;
+    private const int    PollMs     = 200;
+    private const int    RearmPolls = 3;   // ~600ms sin tarjeta para re-armar el disparo
+    private const int    RetryPolls = 10;  // ~2s entre reintentos de carga
 
     public static bool UseV2Chipset = false;
-    public static int  I2cAddr     = 0xA6;
+    public static int  I2cAddr      = 0xA6;
 
     private static int InitBus => UseV2Chipset ? 7 : 6;
     private static int ReadBus => UseV2Chipset ? 7 : 4;
 
-    private static volatile bool            _running;
+    private static volatile bool   _running;
     private static          Thread?         _thread;
     private static          Action<string>? _onCard;
-    private static          bool            _ready;
+    private static volatile bool   _ready;
+    private static          Context?        _appCtx;
 
-    private static IntPtr _cls        = IntPtr.Zero;
-    private static IntPtr _readMethod = IntPtr.Zero;
+    private static IntPtr _cls          = IntPtr.Zero;  // referencia GLOBAL (valida entre hilos)
+    private static IntPtr _loadMethod   = IntPtr.Zero;
+    private static IntPtr _readMethod   = IntPtr.Zero;
+    private static IntPtr _statusMethod = IntPtr.Zero;
 
     public static void Init(Context ctx)
     {
+        _appCtx = ctx.ApplicationContext ?? ctx;
+
         try
         {
             int s = Settings.Global.GetInt(ctx.ContentResolver, "dazzle_nfc_i2c_addr", 6);
@@ -36,25 +47,50 @@ internal static class NfcKit
 
         try
         {
-            _cls = JNIEnv.FindClass("uno/lanube/kiosk/NfcBridge");
-            IntPtr loadM = JNIEnv.GetStaticMethodID(_cls, "load", "(Landroid/content/Context;I)V");
-            _readMethod  = JNIEnv.GetStaticMethodID(_cls, "readUid", "(III)Ljava/lang/String;");
-            JNIEnv.CallStaticVoidMethod(_cls, loadM, new JValue(ctx), new JValue(InitBus));
+            // FindClass devuelve una referencia LOCAL: la promovemos a GLOBAL para
+            // poder usarla con seguridad desde el hilo de polling.
+            IntPtr local = JNIEnv.FindClass("uno/lanube/kiosk/NfcBridge");
+            _cls = JNIEnv.NewGlobalRef(local);
+            JNIEnv.DeleteLocalRef(local);
 
-            IntPtr statusM = JNIEnv.GetStaticMethodID(_cls, "getStatus", "()Ljava/lang/String;");
-            IntPtr sp = JNIEnv.CallStaticObjectMethod(_cls, statusM);
-            string status = sp == IntPtr.Zero
-                ? ""
-                : (JNIEnv.GetString(sp, JniHandleOwnership.TransferLocalRef) ?? "");
+            _loadMethod   = JNIEnv.GetStaticMethodID(_cls, "load",      "(Landroid/content/Context;I)V");
+            _readMethod   = JNIEnv.GetStaticMethodID(_cls, "readUid",   "(III)Ljava/lang/String;");
+            _statusMethod = JNIEnv.GetStaticMethodID(_cls, "getStatus", "()Ljava/lang/String;");
 
-            _ready = status.StartsWith("OK");
-            Log.Info(Tag, $"NfcBridge {status}  initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
+            TryLoad();
         }
         catch (Exception ex)
         {
             _ready = false;
-            Log.Warn(Tag, $"NfcBridge no disponible: {ex.Message}");
+            Log.Warn(Tag, $"NfcBridge init error: {ex.Message}");
         }
+    }
+
+    /// <summary>Carga droidlogic.jar e inicializa el bus. Devuelve true si quedo listo.</summary>
+    private static bool TryLoad()
+    {
+        if (_cls == IntPtr.Zero || _loadMethod == IntPtr.Zero || _appCtx == null) return false;
+        try
+        {
+            JNIEnv.CallStaticVoidMethod(_cls, _loadMethod, new JValue(_appCtx), new JValue(InitBus));
+            string status = ReadStatus();
+            _ready = status.StartsWith("OK");
+            Log.Info(Tag, $"NfcBridge {status}  initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
+            return _ready;
+        }
+        catch (Exception ex)
+        {
+            _ready = false;
+            Log.Warn(Tag, $"NfcBridge load error: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static string ReadStatus()
+    {
+        if (_statusMethod == IntPtr.Zero) return "";
+        IntPtr sp = JNIEnv.CallStaticObjectMethod(_cls, _statusMethod);
+        return sp == IntPtr.Zero ? "" : (JNIEnv.GetString(sp, JniHandleOwnership.TransferLocalRef) ?? "");
     }
 
     public static void Register(Action<string> cb) => _onCard = cb;
@@ -62,7 +98,7 @@ internal static class NfcKit
 
     public static void StartReadJob()
     {
-        if (_running || !_ready) return;
+        if (_running) return;
         _running = true;
         _thread  = new Thread(ReadLoop) { IsBackground = true, Name = "NfcKit-Poll" };
         _thread.Start();
@@ -72,12 +108,34 @@ internal static class NfcKit
 
     private static void ReadLoop()
     {
-        int n = 0;
+        string lastSent        = "";
+        int    absent          = 0;
+        int    reloadCountdown = 0;
+
         while (_running)
         {
+            // Si droidlogic no cargo (panel lento), reintentar periodicamente.
+            if (!_ready)
+            {
+                if (--reloadCountdown <= 0) { TryLoad(); reloadCountdown = RetryPolls; }
+                Thread.Sleep(PollMs);
+                continue;
+            }
+
             var uid = ReadCard();
-            if (++n % 25 == 0) Log.Debug(Tag, $"heartbeat #{n}");
-            if (!string.IsNullOrEmpty(uid)) _onCard?.Invoke(uid);
+            if (string.IsNullOrEmpty(uid))
+            {
+                if (++absent >= RearmPolls) lastSent = "";  // re-armar al retirar la tarjeta
+            }
+            else
+            {
+                absent = 0;
+                if (uid != lastSent)                         // un solo disparo por presentacion
+                {
+                    lastSent = uid;
+                    _onCard?.Invoke(uid);
+                }
+            }
             Thread.Sleep(PollMs);
         }
     }
