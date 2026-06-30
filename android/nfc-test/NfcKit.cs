@@ -9,7 +9,7 @@ internal static class NfcKit
 {
     private const string Tag     = "NfcKit";
     private const int    RegAddr = 0x21;
-    private const int    PollMs  = 500;
+    private const int    PollMs  = 200;
 
     public static bool   UseV2Chipset = false;
     public static int    I2cAddr      = 0xA6;
@@ -27,8 +27,9 @@ internal static class NfcKit
     private static          bool            _ready;
 
     private static IntPtr _cls        = IntPtr.Zero;
-    private static IntPtr _initMethod = IntPtr.Zero;
     private static IntPtr _readMethod = IntPtr.Zero;
+
+    public static bool IsReady => _ready;
 
     private static void Step(string msg)
     {
@@ -54,21 +55,27 @@ internal static class NfcKit
 
         try
         {
-            Step("[3] JNI FindClass NfcBridge...");
+            Step("[3] FindClass NfcBridge...");
             _cls = JNIEnv.FindClass("uno/lanube/nfctest/NfcBridge");
             Step("[3] OK");
 
-            Step("[4] GetStaticMethodID...");
-            _initMethod = JNIEnv.GetStaticMethodID(_cls, "i2cInit", "(I)V");
-            _readMethod = JNIEnv.GetStaticMethodID(_cls, "readUid", "(III)Ljava/lang/String;");
-            Step("[4] OK");
+            IntPtr loadM   = JNIEnv.GetStaticMethodID(_cls, "load", "(Landroid/content/Context;I)V");
+            IntPtr statusM = JNIEnv.GetStaticMethodID(_cls, "getStatus", "()Ljava/lang/String;");
+            _readMethod    = JNIEnv.GetStaticMethodID(_cls, "readUid", "(III)Ljava/lang/String;");
 
-            Step($"[5] i2cInit(bus={InitBus})...");
-            JNIEnv.CallStaticVoidMethod(_cls, _initMethod, new JValue(InitBus));
-            Step("[5] OK");
+            Step($"[4] load(ctx, initBus={InitBus})...");
+            JNIEnv.CallStaticVoidMethod(_cls, loadM, new JValue(ctx), new JValue(InitBus));
 
-            _ready = true;
-            Step($"[6] LISTO  readBus={ReadBus}  i2cAddr=0x{I2cAddr:X2}");
+            IntPtr sp = JNIEnv.CallStaticObjectMethod(_cls, statusM);
+            string status = sp == IntPtr.Zero
+                ? ""
+                : (JNIEnv.GetString(sp, JniHandleOwnership.TransferLocalRef) ?? "");
+            Step($"[5] {status}");
+
+            _ready = status.StartsWith("OK");
+            Step(_ready
+                ? $"[6] LISTO  readBus={ReadBus}  addr=0x{I2cAddr:X2}"
+                : "[6] NO LISTO - droidlogic no cargado");
         }
         catch (Exception ex)
         {
@@ -77,14 +84,12 @@ internal static class NfcKit
         }
     }
 
-    public static bool IsReady => _ready;
-
     public static void Register(Action<string> cb) => _onCard = cb;
     public static void Unregister()                 => _onCard = null;
 
     public static void StartReadJob()
     {
-        if (_running || !_ready) { Step($"[POLL] skip: ready={IsReady}"); return; }
+        if (_running || !_ready) { Step($"[POLL] skip: ready={_ready}"); return; }
         Step("[POLL] hilo iniciado");
         _running = true;
         _thread  = new Thread(ReadLoop) { IsBackground = true, Name = "NfcKit-Poll" };
