@@ -9,6 +9,7 @@
     <ApplicationId>uno.lanube.kiosk</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <NoWarn>CS8764;CS8618;CS8601;CS8603;CS0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,7 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AndroidJavaLibrary Remove="**\*.jar" />
+    <AndroidJavaLibrary Include="libs\classes.jar" />
+    <TransformFile Include="Transforms\Metadata.xml" />
   </ItemGroup>
 
 </Project>

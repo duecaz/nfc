@@ -9,10 +9,12 @@
     <ApplicationId>uno.lanube.nfctest</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <NoWarn>CS8764;CS8618;CS8601;CS8603;CS0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <AndroidJavaLibrary Remove="**\*.jar" />
+    <AndroidJavaLibrary Include="..\kiosk-dotnet\libs\classes.jar" />
+    <TransformFile Include="..\kiosk-dotnet\Transforms\Metadata.xml" />
   </ItemGroup>
 
 </Project>
