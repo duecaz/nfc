@@ -1,0 +1,14 @@
+<metadata>
+  <!--
+    El classes.jar contiene el SDK TV completo de Amlogic.
+    Solo necesitamos TvControlManager para leer NFC via I2C.
+    Estas clases tienen errores en la generacion de bindings C# y no las usamos.
+  -->
+
+  <!-- CS0535: Program no implementa IComparable.CompareTo -->
+  <remove-node path="/api/package[@name='com.droidlogic.app.tv']/class[@name='Program']" />
+
+  <!-- CS0534/CS0535: TvDataBaseManager inner classes no implementan Comparator/AsyncTask -->
+  <remove-node path="/api/package[@name='com.droidlogic.app.tv']/class[@name='TvDataBaseManager']" />
+
+</metadata>

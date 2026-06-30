@@ -22,9 +22,13 @@
 
     ANTES DE COMPILAR copiar classes.jar a esta carpeta:
       git show origin/claude/trusting-allen-iZTR7:classes.jar > android\kiosk-dotnet\libs\classes.jar
+      (si sale corrupto usar: git checkout origin/claude/trusting-allen-iZTR7 -- classes.jar
+       luego: Copy-Item classes.jar android\kiosk-dotnet\libs\classes.jar -Force
+              git reset HEAD classes.jar && Remove-Item classes.jar)
   -->
   <ItemGroup>
     <AndroidJavaLibrary Include="libs\classes.jar" />
+    <TransformFile Include="Transforms\Metadata.xml" />
   </ItemGroup>
 
 </Project>
