@@ -15,6 +15,7 @@
   <ItemGroup>
     <AndroidJavaLibrary Include="..\kiosk-dotnet\libs\classes.jar" />
     <TransformFile Include="..\kiosk-dotnet\Transforms\Metadata.xml" />
+    <AndroidJavaSource Include="Jni\NfcBridge.java" />
   </ItemGroup>
 
 </Project>

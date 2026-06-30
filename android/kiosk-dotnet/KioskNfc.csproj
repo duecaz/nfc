@@ -19,6 +19,7 @@
   <ItemGroup>
     <AndroidJavaLibrary Include="libs\classes.jar" />
     <TransformFile Include="Transforms\Metadata.xml" />
+    <AndroidJavaSource Include="Jni\NfcBridge.java" />
   </ItemGroup>
 
 </Project>

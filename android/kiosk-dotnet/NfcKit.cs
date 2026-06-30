@@ -8,7 +8,7 @@ namespace LaNubeKiosk;
 internal static class NfcKit
 {
     private const string Tag     = "NfcKit";
-    private const int    RegAddr = 0x21;  // REGADDR_CARD_READ
+    private const int    RegAddr = 0x21;
     private const int    PollMs  = 500;
 
     public static bool UseV2Chipset = false;
@@ -20,10 +20,7 @@ internal static class NfcKit
     private static volatile bool            _running;
     private static          Thread?         _thread;
     private static          Action<string>? _onCard;
-
-    private static IntPtr _mgrRef  = IntPtr.Zero;
-    private static IntPtr _initMid = IntPtr.Zero;
-    private static IntPtr _readMid = IntPtr.Zero;
+    private static          AndroidJavaClass? _bridge;
 
     public static void Init(Context ctx)
     {
@@ -31,34 +28,19 @@ internal static class NfcKit
         {
             int s = Settings.Global.GetInt(ctx.ContentResolver, "dazzle_nfc_i2c_addr", 6);
             I2cAddr = s switch { 6 => 0xA6, 8 => 0xA8, _ => 0xA2 };
-            Log.Info(Tag, $"dazzle_nfc_i2c_addr={s}  i2c_addr=0x{I2cAddr:X2}");
         }
-        catch
-        {
-            // Android S+: clave restringida. I2cAddr=0xA6 ya es el default correcto.
-            Log.Info(Tag, $"Settings restringido -> i2c_addr=0x{I2cAddr:X2} (hardcoded)");
-        }
+        catch { /* Android S+: restringido, 0xA6 es el default correcto */ }
 
         try
         {
-            var cls = JNIEnv.FindClass("com/droidlogic/app/tv/TvControlManager");
-
-            var getInstId = JNIEnv.GetStaticMethodID(cls,
-                "getInstance", "()Lcom/droidlogic/app/tv/TvControlManager;");
-            var localMgr = JNIEnv.CallStaticObjectMethod(cls, getInstId);
-            _mgrRef  = JNIEnv.NewGlobalRef(localMgr);
-            _initMid = JNIEnv.GetMethodID(cls, "i2c_init", "(I)V");
-            _readMid = JNIEnv.GetMethodID(cls, "i2c_read", "(IIII[I)I");
-            JNIEnv.DeleteLocalRef(localMgr);
-            JNIEnv.DeleteLocalRef(cls);
-
-            JNIEnv.CallVoidMethod(_mgrRef, _initMid, new JValue[] { new JValue(InitBus) });
-            Log.Info(Tag, $"TvControlManager JNI OK  initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
+            _bridge = new AndroidJavaClass("uno.lanube.kiosk.NfcBridge");
+            _bridge.CallStatic("i2cInit", InitBus);
+            Log.Info(Tag, $"NfcBridge OK  initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
         }
         catch (Exception ex)
         {
-            _mgrRef = IntPtr.Zero;
-            Log.Warn(Tag, $"TvControlManager no disponible: {ex.Message}");
+            _bridge = null;
+            Log.Warn(Tag, $"NfcBridge no disponible: {ex.Message}");
         }
     }
 
@@ -67,7 +49,7 @@ internal static class NfcKit
 
     public static void StartReadJob()
     {
-        if (_running || _mgrRef == IntPtr.Zero) return;
+        if (_running || _bridge == null) return;
         _running = true;
         _thread  = new Thread(ReadLoop) { IsBackground = true, Name = "NfcKit-Poll" };
         _thread.Start();
@@ -81,7 +63,7 @@ internal static class NfcKit
         while (_running)
         {
             var uid = ReadCard();
-            if (++n % 20 == 0) Log.Debug(Tag, $"heartbeat #{n}  readBus={ReadBus}");
+            if (++n % 20 == 0) Log.Debug(Tag, $"heartbeat #{n}");
             if (!string.IsNullOrEmpty(uid)) _onCard?.Invoke(uid);
             Thread.Sleep(PollMs);
         }
@@ -89,30 +71,14 @@ internal static class NfcKit
 
     private static string ReadCard()
     {
-        if (_mgrRef == IntPtr.Zero || _readMid == IntPtr.Zero) return "";
+        if (_bridge == null) return "";
         try
         {
-            int[] tmp  = new int[6];
-            var   jBuf = JNIEnv.NewArray(tmp);
-            try
-            {
-                int ret = JNIEnv.CallIntMethod(_mgrRef, _readMid, new JValue[]
-                {
-                    new JValue(ReadBus), new JValue(I2cAddr),
-                    new JValue(RegAddr), new JValue(5),
-                    new JValue(jBuf)
-                });
-                if (ret != 0) return "";
-
-                JNIEnv.CopyArray(jBuf, tmp);
-                var uid = string.Concat(tmp.Take(4).Select(b => (b & 0xFF).ToString("X2")));
-                return uid == "00000000" ? "" : uid;
-            }
-            finally { JNIEnv.DeleteLocalRef(jBuf); }
+            return _bridge.CallStatic<string>("readUid", ReadBus, I2cAddr, RegAddr) ?? "";
         }
         catch (Exception ex)
         {
-            Log.Error(Tag, $"ReadCard: {ex.Message}");
+            Log.Error(Tag, $"readUid: {ex.Message}");
             return "";
         }
     }
