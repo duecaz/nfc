@@ -15,4 +15,8 @@
     <PackageReference Include="Xamarin.AndroidX.Core" Version="1.15.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AndroidJavaLibrary Remove="**\*.jar" />
+  </ItemGroup>
+
 </Project>
