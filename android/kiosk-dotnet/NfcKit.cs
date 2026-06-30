@@ -5,24 +5,14 @@ using Android.Util;
 
 namespace LaNubeKiosk;
 
-// Lee NFC via TvControlManager de Amlogic/Droidlogic usando JNI directo.
-// La implementacion real esta en /system/framework/droidlogic.jar del panel.
-// Metodos Java confirmados con javap:
-//   public static TvControlManager getInstance()           -> JNI: ()Lcom/droidlogic/app/tv/TvControlManager;
-//   public void  i2c_init(int bus)                         -> JNI: (I)V
-//   public int   i2c_read(int bus,int addr,int reg,int n,int[] buf)  -> JNI: (IIII[I)I
 internal static class NfcKit
 {
     private const string Tag     = "NfcKit";
     private const int    RegAddr = 0x21;  // REGADDR_CARD_READ
     private const int    PollMs  = 500;
 
-    // Chipset normal: i2c_init(bus=6), i2c_read(bus=4)  -- patron original NfcKit.kt
-    // RK3576v2:       ambos buses = 7
     public static bool UseV2Chipset = false;
-
-    // Direccion I2C leida de Settings en Init()
-    public static int I2cAddr = 0xA2;
+    public static int  I2cAddr     = 0xA6;  // panel: dazzle_nfc_i2c_addr=6 -> 0xA6
 
     private static int InitBus => UseV2Chipset ? 7 : 6;
     private static int ReadBus => UseV2Chipset ? 7 : 4;
@@ -31,7 +21,6 @@ internal static class NfcKit
     private static          Thread?         _thread;
     private static          Action<string>? _onCard;
 
-    // JNI handles -- validos mientras el proceso vive
     private static IntPtr _mgrRef  = IntPtr.Zero;
     private static IntPtr _initMid = IntPtr.Zero;
     private static IntPtr _readMid = IntPtr.Zero;
@@ -44,7 +33,11 @@ internal static class NfcKit
             I2cAddr = s switch { 6 => 0xA6, 8 => 0xA8, _ => 0xA2 };
             Log.Info(Tag, $"dazzle_nfc_i2c_addr={s}  i2c_addr=0x{I2cAddr:X2}");
         }
-        catch (Exception ex) { Log.Warn(Tag, $"dazzle_nfc_i2c_addr: {ex.Message}"); }
+        catch
+        {
+            // Android S+: clave restringida. I2cAddr=0xA6 ya es el default correcto.
+            Log.Info(Tag, $"Settings restringido -> i2c_addr=0x{I2cAddr:X2} (hardcoded)");
+        }
 
         try
         {
@@ -53,15 +46,14 @@ internal static class NfcKit
             var getInstId = JNIEnv.GetStaticMethodID(cls,
                 "getInstance", "()Lcom/droidlogic/app/tv/TvControlManager;");
             var localMgr = JNIEnv.CallStaticObjectMethod(cls, getInstId);
-            _mgrRef = JNIEnv.NewGlobalRef(localMgr);
-            JNIEnv.DeleteLocalRef(localMgr);
-
+            _mgrRef  = JNIEnv.NewGlobalRef(localMgr);
             _initMid = JNIEnv.GetMethodID(cls, "i2c_init", "(I)V");
             _readMid = JNIEnv.GetMethodID(cls, "i2c_read", "(IIII[I)I");
+            JNIEnv.DeleteLocalRef(localMgr);
             JNIEnv.DeleteLocalRef(cls);
 
             JNIEnv.CallVoidMethod(_mgrRef, _initMid, new JValue[] { new JValue(InitBus) });
-            Log.Info(Tag, $"TvControlManager JNI OK - initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
+            Log.Info(Tag, $"TvControlManager JNI OK  initBus={InitBus} readBus={ReadBus} addr=0x{I2cAddr:X2}");
         }
         catch (Exception ex)
         {
@@ -101,22 +93,18 @@ internal static class NfcKit
         try
         {
             int[] tmp  = new int[6];
-            var   jBuf = JNIEnv.NewArray(tmp);  // crea Java int[] de 6 ceros
+            var   jBuf = JNIEnv.NewArray(tmp);
             try
             {
                 int ret = JNIEnv.CallIntMethod(_mgrRef, _readMid, new JValue[]
                 {
-                    new JValue(ReadBus),
-                    new JValue(I2cAddr),
-                    new JValue(RegAddr),
-                    new JValue(5),
+                    new JValue(ReadBus), new JValue(I2cAddr),
+                    new JValue(RegAddr), new JValue(5),
                     new JValue(jBuf)
                 });
                 if (ret != 0) return "";
 
-                JNIEnv.CopyArray(jBuf, tmp);  // copia resultados de Java a C#
-
-                // 4 bytes -> 8 chars hex mayuscula, ej: "D779CD0A"
+                JNIEnv.CopyArray(jBuf, tmp);
                 var uid = string.Concat(tmp.Take(4).Select(b => (b & 0xFF).ToString("X2")));
                 return uid == "00000000" ? "" : uid;
             }

@@ -7,19 +7,18 @@ namespace NfcTest;
 
 internal static class NfcKit
 {
-    private const string Tag    = "NfcKit";
+    private const string Tag     = "NfcKit";
     private const int    RegAddr = 0x21;
     private const int    PollMs  = 500;
 
     public static bool   UseV2Chipset = false;
-    public static int    I2cAddr      = 0xA2;
+    public static int    I2cAddr      = 0xA6;  // panel: dazzle_nfc_i2c_addr=6 -> 0xA6
     public static string LastError    = "(ninguno)";
     public static int    ReadCount    = 0;
     public static int    LastRet      = -99;
     public static string LastBuf      = "";
     public static string LastUid      = "";
 
-    // Pasos de inicializacion (para mostrar en pantalla)
     public static readonly List<string> Steps = new();
 
     private static int InitBus => UseV2Chipset ? 7 : 6;
@@ -50,51 +49,47 @@ internal static class NfcKit
             I2cAddr = s switch { 6 => 0xA6, 8 => 0xA8, _ => 0xA2 };
             Step($"[2] dazzle_nfc_i2c_addr={s}  I2cAddr=0x{I2cAddr:X2}");
         }
-        catch (Exception ex)
+        catch
         {
-            Step($"[2] Settings ERROR: {ex.Message}  -> I2cAddr=0x{I2cAddr:X2} (default)");
+            // Android S+: clave restringida. I2cAddr=0xA6 ya es el default correcto.
+            Step($"[2] Settings restringido (Android S+) -> I2cAddr=0x{I2cAddr:X2} (hardcoded)");
         }
 
         try
         {
-            Step("[3] FindClass com/droidlogic/app/tv/TvControlManager...");
+            Step("[3] FindClass TvControlManager...");
             var cls = JNIEnv.FindClass("com/droidlogic/app/tv/TvControlManager");
             Step($"[3] FindClass OK  cls=0x{cls:X}");
 
             Step("[4] GetStaticMethodID getInstance...");
             var getInstId = JNIEnv.GetStaticMethodID(cls,
                 "getInstance", "()Lcom/droidlogic/app/tv/TvControlManager;");
-            Step($"[4] GetStaticMethodID OK  id=0x{getInstId:X}");
+            Step($"[4] OK  id=0x{getInstId:X}");
 
-            Step("[5] CallStaticObjectMethod (getInstance)...");
+            Step("[5] getInstance()...");
             var localMgr = JNIEnv.CallStaticObjectMethod(cls, getInstId);
-            Step($"[5] getInstance OK  obj=0x{localMgr:X}");
+            Step($"[5] OK  obj=0x{localMgr:X}");
 
             _mgrRef = JNIEnv.NewGlobalRef(localMgr);
             JNIEnv.DeleteLocalRef(localMgr);
 
-            Step("[6] GetMethodID i2c_init...");
             _initMid = JNIEnv.GetMethodID(cls, "i2c_init", "(I)V");
-            Step($"[6] i2c_init methodID OK  0x{_initMid:X}");
+            Step($"[6] i2c_init methodID OK");
 
-            Step("[7] GetMethodID i2c_read...");
             _readMid = JNIEnv.GetMethodID(cls, "i2c_read", "(IIII[I)I");
-            Step($"[7] i2c_read methodID OK  0x{_readMid:X}");
+            Step($"[7] i2c_read methodID OK");
 
             JNIEnv.DeleteLocalRef(cls);
 
-            Step($"[8] Llamando i2c_init(bus={InitBus})...");
+            Step($"[8] i2c_init(bus={InitBus})...");
             JNIEnv.CallVoidMethod(_mgrRef, _initMid, new JValue[] { new JValue(InitBus) });
-            Step($"[8] i2c_init({InitBus}) OK");
-
-            Step($"[9] LISTO. readBus={ReadBus}  i2cAddr=0x{I2cAddr:X2}");
+            Step($"[9] LISTO  readBus={ReadBus}  i2cAddr=0x{I2cAddr:X2}");
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
             _mgrRef   = IntPtr.Zero;
-            Step($"[ERR] EXCEPCION: {ex.GetType().Name}: {ex.Message}");
-            Log.Error(Tag, $"Init FAILED: {ex}");
+            Step($"[ERR] {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -105,8 +100,12 @@ internal static class NfcKit
 
     public static void StartReadJob()
     {
-        if (_running || _mgrRef == IntPtr.Zero) { Step($"[POLL] StartReadJob skip: running={_running} mgr={_mgrRef:X}"); return; }
-        Step("[POLL] Iniciando hilo de lectura...");
+        if (_running || _mgrRef == IntPtr.Zero)
+        {
+            Step($"[POLL] skip: running={_running} ready={IsReady}");
+            return;
+        }
+        Step("[POLL] hilo iniciado");
         _running = true;
         _thread  = new Thread(ReadLoop) { IsBackground = true, Name = "NfcKit-Poll" };
         _thread.Start();
@@ -121,7 +120,7 @@ internal static class NfcKit
         {
             var uid = ReadCard();
             n++;
-            if (n % 10 == 0) Log.Debug(Tag, $"[POLL] heartbeat #{n}  lastRet={LastRet}  lastBuf={LastBuf}");
+            if (n % 10 == 0) Log.Debug(Tag, $"heartbeat #{n} ret={LastRet} buf={LastBuf}");
             if (!string.IsNullOrEmpty(uid))
             {
                 LastUid = uid;
@@ -148,7 +147,7 @@ internal static class NfcKit
                 });
                 LastRet = ret;
                 JNIEnv.CopyArray(jBuf, tmp);
-                LastBuf = string.Join(",", tmp.Take(6).Select(b => $"0x{b:X2}"));
+                LastBuf = string.Join(",", tmp.Take(5).Select(b => $"{b:X2}"));
 
                 if (ret != 0) return "";
 
@@ -161,8 +160,7 @@ internal static class NfcKit
         catch (Exception ex)
         {
             LastRet = -1;
-            LastBuf = $"EX: {ex.Message}";
-            Log.Error(Tag, $"ReadCard ex: {ex.Message}");
+            LastBuf = $"EX:{ex.Message}";
             return "";
         }
     }
