@@ -20,10 +20,11 @@ public class MainActivity : Activity
     private IValueCallback? filePathCallback;
     private DownloadReceiver? _downloadReceiver;
     private readonly System.Collections.Generic.HashSet<long> _activeDownloads = new();
+    private int _sessionGen;   // invalida timers de sesión previos
 
     private const string KioskUrl       = "https://lanube.uno";
     private const string LogTag         = "LaNubeKiosk";
-    private const string ApkVersion     = "6";
+    private const string ApkVersion     = "7";
     private const int    FileChooserCode = 1001;
 
     protected override void OnCreate(Bundle? savedInstanceState)
@@ -49,6 +50,7 @@ public class MainActivity : Activity
         webView.SetWebViewClient(new KioskWebViewClient(this));
         webView.SetWebChromeClient(new KioskWebChromeClient(this));
         webView.SetDownloadListener(new KioskDownloadListener(this));
+        webView.AddJavascriptInterface(new KioskJsBridge(this), "AndroidKiosk");
         webView.LoadUrl(KioskUrl);
 
         nfcAdapter = NfcAdapter.GetDefaultAdapter(this);
@@ -70,11 +72,41 @@ public class MainActivity : Activity
     protected override void OnDestroy()
     {
         base.OnDestroy();
+        CancelSessionTimer();
         if (_downloadReceiver != null)
         {
             UnregisterReceiver(_downloadReceiver);
             _downloadReceiver = null;
         }
+    }
+
+    // ---- Timer nativo de sesión (cierre garantizado, sobrevive a la navegación) ----
+    // Lo dispara la web al autenticar: AndroidKiosk.startSession(minutos).
+    public void StartSessionTimer(int minutes)
+    {
+        int gen = ++_sessionGen;   // invalida cualquier timer anterior
+        Android.Util.Log.Debug(LogTag, $"Sesión: timer {minutes} min (gen {gen})");
+        if (minutes <= 0) return;
+        new Handler(Looper.MainLooper!).PostDelayed(() =>
+        {
+            if (gen != _sessionGen) return;   // reemplazado por otra sesión / cancelado
+            Android.Util.Log.Debug(LogTag, "Sesión expirada -> logout");
+            webView.LoadUrl(KioskUrl + "/logout");
+        }, (long)minutes * 60_000L);
+    }
+
+    public void CancelSessionTimer() => _sessionGen++;
+
+    // Puente JS: expone AndroidKiosk.startSession(minutos) a la web del kiosko.
+    private class KioskJsBridge : Java.Lang.Object
+    {
+        private readonly MainActivity _host;
+        public KioskJsBridge(MainActivity host) => _host = host;
+
+        [Android.Webkit.JavascriptInterface]
+        [Java.Interop.Export("startSession")]
+        public void StartSession(int minutes)
+            => _host.RunOnUiThread(() => _host.StartSessionTimer(minutes));
     }
 
     public override void OnWindowFocusChanged(bool hasFocus)
@@ -335,6 +367,7 @@ public class MainActivity : Activity
 
                 view?.ClearCache(true);
                 view?.ClearHistory();
+                _host.CancelSessionTimer();   // en el kiosko (login) no hay sesión activa
                 Android.Util.Log.Debug(LogTag, "Sesión cerrada: caché e historial limpiados");
             }
         }

@@ -125,7 +125,7 @@ overwrite.cli.url = https://lanube.uno/app
 overwrite.webroot = /app
 trusted_proxies   = 172.16.0.0/12, 192.168.1.0/24
 trusted_domains   = 192.168.1.50, lanube.uno
-auth.bruteforce.protection.enabled = false   ← REACTIVAR antes de producción
+auth.bruteforce.protection.enabled = true    ← reactivado (v16)
 ```
 
 ---
@@ -168,10 +168,29 @@ en el WebView llamando `authenticate('UID')`.
 
 ---
 
+## UID canónico (v16)
+
+Todos los lectores dan la MISMA tarjeta en formatos distintos; el servidor los
+unifica a **hex en mayúsculas** con `canon_uid()` antes de comparar:
+- Lectora USB Windows y panel droidlogic → decimal `3886968074`
+- Web NFC (celular) → hex `E7AE6D0A`
+- Todos → `canon_uid` → `E7AE6D0A`
+
+`find_user()` matchea sin importar el formato (decimal o hex), y `/admin` guarda
+las tarjetas nuevas ya en hex canónico. No hace falta re-registrar las viejas.
+
+## Cierre de sesión (v16)
+
+La "Duración de sesión" la impone el **APK** con un timer nativo: la web llama
+`AndroidKiosk.startSession(minutos)` al autenticar; al expirar, el APK carga
+`/logout` (garantizado, sobrevive a la navegación a Nextcloud). En navegadores
+sin APK (PC), el service worker cierra al navegar tras expirar (respaldo blando).
+
 ## Pendientes antes de producción
 
-1. Reactivar `auth.bruteforce.protection.enabled` en Nextcloud.
+1. ✅ Bruteforce NC reactivado — comando:
+   `docker exec -u www-data nextcloud_server php occ config:system:set auth.bruteforce.protection.enabled --value true --type boolean`
 2. Alta masiva de 30 tarjetas via CSV en `/admin`.
-3. Reemplazar servidor dev de Flask con Gunicorn.
+3. ✅ Gunicorn ya en uso (ver Dockerfile).
 4. Cambiar contraseñas de testeo.
 5. Eliminar regla `app.lanube.uno` en Cloudflare (ya no existe, verificar).

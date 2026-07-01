@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="Xamarin.AndroidX.Core" Version="1.15.0" />
+    <!-- [Export] para exponer la interfaz JS (AndroidKiosk.startSession) a la web -->
+    <Reference Include="Mono.Android.Export" />
   </ItemGroup>
 
   <ItemGroup>

@@ -311,10 +311,15 @@
 
           setStatus('Bienvenido' + (data.user ? ', ' + data.user : '') + '. Abriendo archivos…', 'ok');
 
+          // Cierre de sesión GARANTIZADO por el APK: timer nativo que sobrevive a la
+          // navegación a Nextcloud (el setTimeout de esta página moriría al navegar).
+          if (window.AndroidKiosk && typeof AndroidKiosk.startSession === 'function') {
+            try { AndroidKiosk.startSession(minutes); } catch (e) {}
+          }
+          // Respaldo para navegadores sin APK (PC/Windows): el SW cierra al navegar tras expirar.
           if (navigator.serviceWorker && navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({ type: 'KIOSK_SESSION', expiresAt: expiresAt });
           }
-          setTimeout(function () { window.location.href = '/logout'; }, minutes * 60 * 1000);
 
           window.location.href = data.redirect;
         } else if (r.status === 404) {

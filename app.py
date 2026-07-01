@@ -27,7 +27,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "15"
+VERSION              = "16"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -92,6 +92,38 @@ def save_users(users):
         )
         _users_cache = dict(users)
         _users_mtime = USERS_FILE.stat().st_mtime
+
+
+def canon_uid(raw):
+    """
+    Normaliza cualquier UID a HEX canónico en MAYÚSCULAS, venga de donde venga:
+      - decimal de lectora (Windows / panel droidlogic): "3886968074" -> "E7AE6D0A"
+      - hex (Web NFC):                                    "e7ae6d0a"   -> "E7AE6D0A"
+      - hex con separadores:                              "E7:AE:6D:0A"-> "E7AE6D0A"
+    Un string de solo dígitos se interpreta como el ENTERO de la lectora.
+    """
+    s = re.sub(r"[^0-9A-Fa-f]", "", str(raw or "")).upper()
+    if not s:
+        return ""
+    if s.isdigit():              # solo dígitos -> valor decimal -> hex
+        s = format(int(s), "X")
+    if len(s) % 2:               # completar a bytes enteros
+        s = "0" + s
+    return s.rjust(8, "0")       # mínimo 4 bytes (8 hex)
+
+
+def find_user(uid):
+    """Busca el registro por UID sin importar el formato. Devuelve (clave, registro)."""
+    users = load_users()
+    rec = users.get(uid)
+    if rec:
+        return uid, rec
+    target = canon_uid(uid)
+    if target:
+        for k, v in users.items():
+            if canon_uid(k) == target:
+                return k, v
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -300,8 +332,7 @@ def auth():
     if not uid:
         return jsonify(ok=False, error="UID vacio"), 400
 
-    users = load_users()
-    record = users.get(uid)
+    _, record = find_user(uid)
     if not record:
         return jsonify(ok=False, error="Tarjeta no registrada", uid=uid), 404
 
@@ -488,7 +519,7 @@ def uid_lookup():
     uid = (request.args.get("uid") or "").strip()
     if not uid:
         return jsonify(ok=False), 400
-    record = load_users().get(uid)
+    _, record = find_user(uid)
     if not record:
         return jsonify(ok=False, error="Tarjeta no registrada"), 404
     return jsonify(ok=True, user=record["user"], name=record.get("name", record["user"]))
@@ -570,11 +601,15 @@ def admin_register():
     token, err = _get_app_token(username, nc_password)
     if err:
         return jsonify(ok=False, error=err), 401
+    canon = canon_uid(uid)
     users = load_users()
-    users[uid] = {"user": username, "name": username, "token": token}
+    # quitar cualquier entrada previa de la misma tarjeta (otro formato) para no duplicar
+    for k in [k for k in users if canon_uid(k) == canon]:
+        users.pop(k, None)
+    users[canon] = {"user": username, "name": username, "token": token}
     save_users(users)
-    print(f"[ADMIN] Registrada: uid={uid} user={username}", flush=True)
-    return jsonify(ok=True, uid=uid, user=username, name=username)
+    print(f"[ADMIN] Registrada: uid={canon} user={username}", flush=True)
+    return jsonify(ok=True, uid=canon, user=username, name=username)
 
 
 @app.route("/admin/update", methods=["POST"])
@@ -628,9 +663,12 @@ def admin_bulk():
         if err:
             results.append({"uid": uid, "user": username, "ok": False, "error": err})
         else:
-            users[uid] = {"user": username, "name": display_name, "token": token}
-            results.append({"uid": uid, "user": username, "name": display_name, "ok": True})
-            print(f"[BULK] uid={uid} user={username}", flush=True)
+            canon = canon_uid(uid)
+            for k in [k for k in users if canon_uid(k) == canon]:
+                users.pop(k, None)
+            users[canon] = {"user": username, "name": display_name, "token": token}
+            results.append({"uid": canon, "user": username, "name": display_name, "ok": True})
+            print(f"[BULK] uid={canon} user={username}", flush=True)
     save_users(users)
     ok_count = sum(1 for r in results if r["ok"])
     return jsonify(ok=True, total=len(results), registered=ok_count, results=results)
