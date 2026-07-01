@@ -1,7 +1,7 @@
 # ============================================================
 #  nfc-capture.ps1 — foto de la pantalla del panel (para revisar el error)
 #  screencap en el panel -> pull a la PC -> abre la imagen
-#    powershell -ExecutionPolicy Bypass -File D:\claude\android\nfc\tools\nfc-capture.ps1
+#    powershell -ExecutionPolicy Bypass -File D:\claude\scripts\nfc-capture.ps1
 # ============================================================
 
 # ---------- CONFIG ----------

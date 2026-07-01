@@ -1,6 +1,6 @@
 # ============================================================
 #  nfc-clear.ps1 — borra cookies/datos del kiosko y lo relanza
-#    powershell -ExecutionPolicy Bypass -File D:\claude\android\nfc\tools\nfc-clear.ps1
+#    powershell -ExecutionPolicy Bypass -File D:\claude\scripts\nfc-clear.ps1
 # ============================================================
 
 # ---------- CONFIG ----------

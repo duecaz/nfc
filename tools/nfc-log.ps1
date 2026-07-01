@@ -1,7 +1,7 @@
 # ============================================================
 #  nfc-log.ps1 — logcat NFC en vivo (errores en directo)
 #  Ctrl+C para salir.
-#    powershell -ExecutionPolicy Bypass -File D:\claude\android\nfc\tools\nfc-log.ps1
+#    powershell -ExecutionPolicy Bypass -File D:\claude\scripts\nfc-log.ps1
 # ============================================================
 
 # ---------- CONFIG ----------

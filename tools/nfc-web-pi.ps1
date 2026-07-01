@@ -1,7 +1,7 @@
 # ============================================================
 #  nfc-web-pi.ps1 — Deploy web a la Raspberry Pi
 #  push main -> ssh Pi -> curl main/web + docker rebuild + health
-#    powershell -ExecutionPolicy Bypass -File D:\claude\android\nfc\tools\nfc-web-pi.ps1
+#    powershell -ExecutionPolicy Bypass -File D:\claude\scripts\nfc-web-pi.ps1
 # ============================================================
 
 # ---------- CONFIG ----------

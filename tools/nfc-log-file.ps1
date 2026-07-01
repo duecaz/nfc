@@ -1,7 +1,7 @@
 # ============================================================
 #  nfc-log-file.ps1 — captura el logcat a un archivo (para revisar el error)
 #  Muestra en vivo Y guarda. Ctrl+C cuando termines de reproducir el error.
-#    powershell -ExecutionPolicy Bypass -File D:\claude\android\nfc\tools\nfc-log-file.ps1
+#    powershell -ExecutionPolicy Bypass -File D:\claude\scripts\nfc-log-file.ps1
 # ============================================================
 
 # ---------- CONFIG ----------

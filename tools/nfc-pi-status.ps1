@@ -1,7 +1,7 @@
 # ============================================================
 #  nfc-pi-status.ps1 — estado de servicios en la Pi (ssh)
 #  docker ps + health del kiosko + disco + memoria
-#    powershell -ExecutionPolicy Bypass -File D:\claude\android\nfc\tools\nfc-pi-status.ps1
+#    powershell -ExecutionPolicy Bypass -File D:\claude\scripts\nfc-pi-status.ps1
 # ============================================================
 
 # ---------- CONFIG ----------

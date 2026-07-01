@@ -1,7 +1,7 @@
 # ============================================================
 #  nfc-apk.ps1 — Kiosko Android .NET (uno.lanube.kiosk)
 #  git main -> build Release -> adb install -> run
-#    powershell -ExecutionPolicy Bypass -File D:\claude\android\nfc\tools\nfc-apk.ps1
+#    powershell -ExecutionPolicy Bypass -File D:\claude\scripts\nfc-apk.ps1
 # ============================================================
 
 # ---------- CONFIG (ajustá $REPO si tu repo esta en otra ruta) ----------
