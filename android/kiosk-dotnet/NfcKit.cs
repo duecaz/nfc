@@ -13,9 +13,10 @@ internal static class NfcKit
 {
     private const string Tag        = "NfcKit";
     private const int    RegAddr    = 0x21;
-    private const int    PollMs     = 200;
-    private const int    RearmPolls = 3;   // ~600ms sin tarjeta para re-armar el disparo
-    private const int    RetryPolls = 10;  // ~2s entre reintentos de carga
+    private const int    PollMs     = 100;  // polling del panel (antes 200)
+    private const int    RearmPolls = 3;    // ~300ms sin tarjeta para re-armar el disparo
+    private const int    RetryPolls = 20;   // ~2s entre reintentos de carga
+    private const int    HbPolls    = 25;   // heartbeat de diagnostico (~2.5s)
 
     public static bool UseV2Chipset = false;
     public static int  I2cAddr      = 0xA6;
@@ -33,6 +34,7 @@ internal static class NfcKit
     private static IntPtr _loadMethod   = IntPtr.Zero;
     private static IntPtr _readMethod   = IntPtr.Zero;
     private static IntPtr _statusMethod = IntPtr.Zero;
+    private static IntPtr _readUsMethod = IntPtr.Zero;
 
     public static void Init(Context ctx)
     {
@@ -53,9 +55,10 @@ internal static class NfcKit
             _cls = JNIEnv.NewGlobalRef(local);
             JNIEnv.DeleteLocalRef(local);
 
-            _loadMethod   = JNIEnv.GetStaticMethodID(_cls, "load",      "(Landroid/content/Context;I)V");
-            _readMethod   = JNIEnv.GetStaticMethodID(_cls, "readUid",   "(III)Ljava/lang/String;");
-            _statusMethod = JNIEnv.GetStaticMethodID(_cls, "getStatus", "()Ljava/lang/String;");
+            _loadMethod   = JNIEnv.GetStaticMethodID(_cls, "load",        "(Landroid/content/Context;I)V");
+            _readMethod   = JNIEnv.GetStaticMethodID(_cls, "readUid",     "(III)Ljava/lang/String;");
+            _statusMethod = JNIEnv.GetStaticMethodID(_cls, "getStatus",   "()Ljava/lang/String;");
+            _readUsMethod = JNIEnv.GetStaticMethodID(_cls, "getLastReadUs", "()J");
 
             TryLoad();
         }
@@ -93,6 +96,12 @@ internal static class NfcKit
         return sp == IntPtr.Zero ? "" : (JNIEnv.GetString(sp, JniHandleOwnership.TransferLocalRef) ?? "");
     }
 
+    private static long LastReadUs()
+    {
+        if (_readUsMethod == IntPtr.Zero) return 0;
+        return JNIEnv.CallStaticLongMethod(_cls, _readUsMethod);
+    }
+
     public static void Register(Action<string> cb) => _onCard = cb;
     public static void Unregister()                 => _onCard = null;
 
@@ -111,6 +120,7 @@ internal static class NfcKit
         string lastSent        = "";
         int    absent          = 0;
         int    reloadCountdown = 0;
+        int    hb              = 0;
 
         while (_running)
         {
@@ -133,9 +143,14 @@ internal static class NfcKit
                 if (uid != lastSent)                         // un solo disparo por presentacion
                 {
                     lastSent = uid;
+                    Log.Debug(Tag, $"tarjeta -> {uid}  (i2c_read={LastReadUs()}us)");
                     _onCard?.Invoke(uid);
                 }
             }
+
+            if (++hb % HbPolls == 0)
+                Log.Debug(Tag, $"heartbeat  i2c_read={LastReadUs()}us  poll={PollMs}ms");
+
             Thread.Sleep(PollMs);
         }
     }

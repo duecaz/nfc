@@ -18,7 +18,11 @@ public class NfcBridge {
     private static Method i2cReadMethod;
     private static String status = "sin-init";
 
-    public static String getStatus() { return status; }
+    /** Duracion (microsegundos) del ultimo i2c_read, para diagnostico. */
+    private static volatile long lastReadUs = 0;
+
+    public static String getStatus()     { return status; }
+    public static long   getLastReadUs() { return lastReadUs; }
 
     public static void load(Context ctx, int initBus) {
         String[] jars = {
@@ -60,13 +64,16 @@ public class NfcBridge {
         if (i2cReadMethod == null || tvManager == null) return "";
         try {
             int[] temp = new int[6];
+            long t0 = System.nanoTime();
             int ret = (Integer) i2cReadMethod.invoke(tvManager, bus, addr, reg, 5, temp);
+            lastReadUs = (System.nanoTime() - t0) / 1000;
             if (ret != 0) return "";
             long val = 0;
             for (int i = 0; i < 4; i++) {
                 val = (val << 8) | (temp[i] & 0xFF);
             }
             if (val == 0) return "";
+            Log.i(TAG, "UID=" + val + "  i2c_read=" + lastReadUs + "us");
             return Long.toString(val);
         } catch (Throwable e) {
             Log.e(TAG, "readUid: " + e.getMessage());
