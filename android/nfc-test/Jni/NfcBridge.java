@@ -20,7 +20,6 @@ public class NfcBridge {
 
     public static String getStatus() { return status; }
 
-    /** Carga droidlogic.jar e inicializa el bus I2C. */
     public static void load(Context ctx, int initBus) {
         String[] jars = {
             "/system/framework/droidlogic.jar",
@@ -53,21 +52,22 @@ public class NfcBridge {
         if (tvManager == null) status = "NO encontrado en /system/framework/";
     }
 
-    /** Devuelve UID hex (8 chars min, minusculas) o "" si no hay tarjeta/error. */
+    /**
+     * Devuelve el UID como ENTERO DECIMAL big-endian (igual que la lectora USB
+     * de Windows). Ej: bytes E7 AE 6D 0A -> "3886968074". "" si no hay tarjeta.
+     */
     public static String readUid(int bus, int addr, int reg) {
         if (i2cReadMethod == null || tvManager == null) return "";
         try {
             int[] temp = new int[6];
             int ret = (Integer) i2cReadMethod.invoke(tvManager, bus, addr, reg, 5, temp);
             if (ret != 0) return "";
-            StringBuilder sb = new StringBuilder(8);
+            long val = 0;
             for (int i = 0; i < 4; i++) {
-                String h = Integer.toHexString(temp[i] & 0xFF);
-                if (h.length() < 2) sb.append('0');
-                sb.append(h);
+                val = (val << 8) | (temp[i] & 0xFF);
             }
-            String uid = sb.toString();
-            return uid.equals("00000000") ? "" : uid;
+            if (val == 0) return "";
+            return Long.toString(val);
         } catch (Throwable e) {
             Log.e(TAG, "readUid: " + e.getMessage());
             return "";
