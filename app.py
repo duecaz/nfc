@@ -27,7 +27,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "17"
+VERSION              = "18"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -554,6 +554,7 @@ def test_page():
     <div class="row"><span class="mut">Reloj</span><span id="clock">-</span></div>
     <button id="t1">Probar auto-logout en 1 min</button>
     <button id="t0" class="warn">Cancelar timer</button>
+    <button id="clr" style="background:#7f1d1d">Borrar cookies / forzar logout</button>
     <div class="row" style="margin-top:.4rem"><span class="mut">Estado sesion</span><span id="sess" class="mut">sin iniciar</span></div>
   </div>
 
@@ -593,6 +594,11 @@ def test_page():
   };
   document.getElementById('t0').onclick=function(){
     if(window.AndroidKiosk && AndroidKiosk.startSession){ AndroidKiosk.startSession(0); logout_at=0; log("timer cancelado"); }
+  };
+  document.getElementById('clr').onclick=function(){
+    log("Borrando cookies/cache...");
+    if(window.AndroidKiosk && AndroidKiosk.clearAll){ AndroidKiosk.clearAll(); }
+    else { location.href='/reset'; }
   };
   setInterval(function(){
     clockEl.textContent=new Date().toLocaleTimeString();

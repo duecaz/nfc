@@ -24,7 +24,7 @@ public class MainActivity : Activity
 
     private const string KioskUrl       = "https://lanube.uno";
     private const string LogTag         = "LaNubeKiosk";
-    private const string ApkVersion     = "7";
+    private const string ApkVersion     = "8";
     private const int    FileChooserCode = 1001;
 
     protected override void OnCreate(Bundle? savedInstanceState)
@@ -97,7 +97,20 @@ public class MainActivity : Activity
 
     public void CancelSessionTimer() => _sessionGen++;
 
-    // Puente JS: expone AndroidKiosk.startSession(minutos) a la web del kiosko.
+    // Borra cookies + caché y recarga el kiosko (destraba sesiones pegadas en el panel).
+    public void ClearAllAndReload()
+    {
+        CancelSessionTimer();
+        var cm = CookieManager.Instance;
+        cm?.RemoveAllCookies(null);
+        cm?.Flush();
+        webView.ClearCache(true);
+        webView.ClearHistory();
+        webView.LoadUrl(KioskUrl);
+        Android.Util.Log.Debug(LogTag, "ClearAll: cookies+caché borradas, recargando kiosko");
+    }
+
+    // Puente JS: expone AndroidKiosk.* a la web del kiosko.
     private class KioskJsBridge : Java.Lang.Object
     {
         private readonly MainActivity _host;
@@ -107,6 +120,11 @@ public class MainActivity : Activity
         [Java.Interop.Export("startSession")]
         public void StartSession(int minutes)
             => _host.RunOnUiThread(() => _host.StartSessionTimer(minutes));
+
+        [Android.Webkit.JavascriptInterface]
+        [Java.Interop.Export("clearAll")]
+        public void ClearAll()
+            => _host.RunOnUiThread(() => _host.ClearAllAndReload());
     }
 
     public override void OnWindowFocusChanged(bool hasFocus)
