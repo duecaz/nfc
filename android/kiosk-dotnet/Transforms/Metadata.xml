@@ -1,7 +1,0 @@
-<metadata>
-  <!-- Eliminar todos los paquetes excepto com.droidlogic.app.tv -->
-  <remove-node path="/api/package[not(@name='com.droidlogic.app.tv')]" />
-  <!-- Dentro de com.droidlogic.app.tv, conservar solo TvControlManager -->
-  <remove-node path="/api/package[@name='com.droidlogic.app.tv']/class[not(@name='TvControlManager')]" />
-  <remove-node path="/api/package[@name='com.droidlogic.app.tv']/interface" />
-</metadata>

@@ -1,7 +1,0 @@
-<resources>
-    <style name="Theme.Kiosk" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:windowFullscreen">true</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowBackground">#0F172A</item>
-    </style>
-</resources>

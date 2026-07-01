@@ -64,7 +64,7 @@ public int  i2c_read(int bus, int addr, int reg, int count, int[] buf)
 ## 4. Implementación que funciona
 
 ### 4.1 Android Studio (Kotlin) — referencia original
-`android/nfc-test/app/src/main/kotlin/.../NfcKit.kt`. Usa `DexClassLoader`
+`test/app/src/main/kotlin/.../NfcKit.kt (o docs/referencia-fabricante/NfcKit.kt)`. Usa `DexClassLoader`
 probando varias rutas y llama por reflexión. El comentario del `build.gradle.kts`
 lo resume: *"classes.jar ya no necesario: TvControlManager se carga desde
 /system/framework/ via DexClassLoader"*.
@@ -75,8 +75,8 @@ Java** (`Jni/NfcBridge.java`, compilado con `<AndroidJavaSource>`) que hace el
 `DexClassLoader` + reflexión, y C# lo llama por JNI. El bridge usa reflexión, así
 que **no necesita `classes.jar` para compilar**.
 
-- `android/nfc-test/Jni/NfcBridge.java`  (paquete `uno.lanube.nfctest`)
-- `android/kiosk-dotnet/Jni/NfcBridge.java` (paquete `uno.lanube.kiosk`)
+- `test/Jni/NfcBridge.java`  (paquete `uno.lanube.nfctest`)
+- `apk/Jni/NfcBridge.java` (paquete `uno.lanube.kiosk`)
 - C#: `NfcKit.cs` llama `load(Context, initBus)`, `readUid(bus, addr, reg)`, `getStatus()`.
 
 **Rutas de JAR que prueba el bridge (en orden):**

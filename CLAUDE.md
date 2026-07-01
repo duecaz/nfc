@@ -48,21 +48,30 @@ nginx config: `~/docker/nginx/data/nginx/custom/http.conf`
 
 ---
 
+## Estructura del repo
+
+```
+web/    proyecto Flask (lo que va a la Pi)   -> web/app.py, web/templates/
+apk/    kiosko Android .NET (lee NFC droidlogic)
+test/   app de diagnóstico NFC (.NET + Kotlin de referencia)
+docs/   documentación (arquitectura, nfc-droidlogic, referencia-fabricante)
+tools/  utilidades (adb watch)
+```
+
 ## Repo y deploy
 
-- Repo: `duecaz/nfc` — rama activa: `claude/clever-fermat-6852kl`
-- La Pi **NO es git repo** — los archivos se copian manualmente con curl.
+- Repo: `duecaz/nfc` — rama por defecto: **`main`**
+- La Pi **NO es git repo** — los archivos se copian con curl desde `main/web/`.
 - Los templates están **dentro de la imagen Docker** (COPY en Dockerfile).
   `docker compose restart` NO actualiza nada — siempre hay que hacer rebuild.
 
 ### Deploy completo (copiar archivos + rebuild)
 
 ```bash
+B=main
 cd ~/docker/kiosk && \
-curl -o app.py "https://raw.githubusercontent.com/duecaz/nfc/claude/clever-fermat-6852kl/app.py" && \
-curl -o templates/index.html "https://raw.githubusercontent.com/duecaz/nfc/claude/clever-fermat-6852kl/templates/index.html" && \
-curl -o templates/login_manual.html "https://raw.githubusercontent.com/duecaz/nfc/claude/clever-fermat-6852kl/templates/login_manual.html" && \
-curl -o templates/cambiar_clave.html "https://raw.githubusercontent.com/duecaz/nfc/claude/clever-fermat-6852kl/templates/cambiar_clave.html" && \
+for f in app.py templates/index.html templates/login_manual.html templates/cambiar_clave.html templates/admin.html; do \
+  curl -o "$f" "https://raw.githubusercontent.com/duecaz/nfc/$B/web/$f"; done && \
 docker compose down && docker compose build --no-cache && docker compose up -d && \
 sleep 5 && curl -s http://localhost:8200/health
 ```
@@ -142,7 +151,7 @@ Verificar con `curl -s http://localhost:8200/health` que la versión coincide.
 
 Las pantallas con lector NFC integrado leen por bus I2C usando
 `com.droidlogic.app.tv.TvControlManager` del firmware. Ver doc completa en
-`android/NFC-Droidlogic.md`. Clave: el `classes.jar` del programador es solo un
+`docs/nfc-droidlogic.md`. Clave: el `classes.jar` del programador es solo un
 stub de compilación; el driver real se carga en runtime con `DexClassLoader`
 desde `/system/framework/droidlogic.jar`. El APK kiosko (.NET) inyecta el UID
 en el WebView llamando `authenticate('UID')`.
@@ -160,11 +169,10 @@ en el WebView llamando `authenticate('UID')`.
 - **El SW bloquea updates en el navegador normal.** Si se ve la versión vieja
   pero incógnito muestra la nueva → ir a `/reset`. No es un problema de deploy.
 
-- **`git push` por CLI falla** en este entorno (sin credenciales). Usar
-  `mcp__github__push_files` para todos los pushes a GitHub.
-
-- **Después de push por MCP**, el repo local queda desincronizado. Si se
-  necesita trabajar con git: `git fetch origin && git reset --hard origin/<rama>`.
+- **git**: el push por CLI funciona a través del proxy **si el local está
+  sincronizado** (`git fetch && git reset --hard origin/main` antes de trabajar).
+  Alternativa: `mcp__github__push_files`. Tras un push por MCP, el local queda
+  desincronizado → volver a sincronizar con reset --hard.
 
 ---
 
