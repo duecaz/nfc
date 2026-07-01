@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>La Nube · Acceso docente</title>
+  <title>La Nube &middot; Acceso docente</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; overflow: hidden; }
@@ -22,7 +22,7 @@
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 12px;
-      padding: 2.75rem 2.5rem 2.25rem;
+      padding: 2.25rem 2.5rem 2rem;
       width: 90%; max-width: 400px;
       text-align: center;
       box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 20px rgba(0,0,0,.06);
@@ -49,14 +49,14 @@
     .sub {
       font-size: .875rem;
       color: #64748b;
-      margin-bottom: 2.25rem;
+      margin-bottom: 1.75rem;
     }
 
     /* NFC zone */
     .nfc-wrap {
       position: relative;
       width: 110px; height: 110px;
-      margin: 0 auto 1.75rem;
+      margin: 0 auto 1.5rem;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -104,17 +104,55 @@
       min-height: 1rem;
     }
 
+    /* Duration selector */
+    .duration-bar {
+      margin-top: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .45rem;
+    }
+    .dur-label {
+      font-size: .68rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      font-weight: 600;
+    }
+    .dur-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .35rem;
+      justify-content: center;
+    }
+    .dur-chip {
+      padding: .28rem .8rem;
+      border-radius: 999px;
+      border: 1.5px solid #e2e8f0;
+      background: transparent;
+      color: #64748b;
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      font-family: inherit;
+      line-height: 1.4;
+    }
+    .dur-chip:hover { border-color: #94a3b8; color: #374151; }
+    .dur-chip.active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #fff;
+    }
+
     hr {
       border: none;
       border-top: 1px solid #f1f5f9;
-      margin: 1.75rem 0 1.5rem;
+      margin: 1.5rem 0 1.25rem;
     }
 
     /* Buttons */
-    .actions {
-      display: flex;
-      gap: .6rem;
-    }
+    .actions { display: flex; gap: .6rem; }
     .btn {
       flex: 1;
       padding: .65rem 1rem;
@@ -134,7 +172,6 @@
     }
     .btn-outline:hover  { background: #f8fafc; border-color: #94a3b8; }
     .btn-outline:active { background: #f1f5f9; }
-
     .btn-solid {
       background: #0f172a;
       border: 1px solid #0f172a;
@@ -143,13 +180,11 @@
     .btn-solid:hover  { background: #1e293b; }
     .btn-solid:active { background: #070d18; }
 
-    /* Tiny links */
     .repair-link {
       position: fixed; bottom: .5rem; left: .75rem;
       font-size: .6rem; color: #d1d5db; text-decoration: none;
     }
     .repair-link:hover { color: #9ca3af; }
-
     .ver {
       position: fixed; bottom: .5rem; right: .75rem;
       font-size: .6rem; color: #d1d5db; pointer-events: none;
@@ -166,7 +201,6 @@
 
   <div class="card">
     <div class="logo-mark">
-      <!-- Lucide "cloud" -->
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
            stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>
@@ -178,7 +212,6 @@
     <div class="nfc-wrap">
       <div class="nfc-ring"></div>
       <div class="nfc-inner">
-        <!-- Lucide credit-card -->
         <svg width="38" height="28" viewBox="0 0 24 16" fill="none"
              stroke="#64748b" stroke-width="1.5"
              stroke-linecap="round" stroke-linejoin="round">
@@ -190,6 +223,18 @@
 
     <div class="status" id="status">Acercá tu tarjeta para ingresar</div>
     <div class="uid" id="uid"></div>
+
+    <div class="duration-bar">
+      <span class="dur-label">Duración de sesión</span>
+      <div class="dur-chips" id="dur-chips">
+        <button class="dur-chip active" data-min="40">40 min</button>
+        <button class="dur-chip" data-min="80">1h 20min</button>
+        <button class="dur-chip" data-min="120">2h</button>
+        <button class="dur-chip" data-min="160">2h 40min</button>
+        <button class="dur-chip" data-min="200">3h 20min</button>
+        <button class="dur-chip" data-min="240">4h</button>
+      </div>
+    </div>
 
     <hr>
 
@@ -232,7 +277,7 @@
     function refocus() {
       if (document.activeElement !== catcher) catcher.focus();
     }
-    setInterval(refocus, 400);
+    setInterval(refocus, 100);
     document.addEventListener('click', e => {
       if (!e.target.closest('a, button')) refocus();
     });
@@ -243,6 +288,16 @@
       statusEl.className = 'status' + (cls ? ' ' + cls : '');
     }
 
+    // Chip selection
+    document.getElementById('dur-chips').addEventListener('click', function (e) {
+      var chip = e.target.closest('.dur-chip');
+      if (!chip) return;
+      document.querySelectorAll('.dur-chip').forEach(function (c) {
+        c.classList.remove('active');
+      });
+      chip.classList.add('active');
+    });
+
     async function authenticate(uid) {
       setStatus('Verificando…');
       uidEl.textContent = '';
@@ -250,7 +305,17 @@
         const r    = await fetch('/auth', { method: 'POST', body: new URLSearchParams({ uid }) });
         const data = await r.json();
         if (data.ok) {
-          setStatus('Bienvenido. Abriendo archivos…', 'ok');
+          var activeChip = document.querySelector('.dur-chip.active');
+          var minutes    = activeChip ? parseInt(activeChip.dataset.min, 10) : 40;
+          var expiresAt  = Date.now() + minutes * 60 * 1000;
+
+          setStatus('Bienvenido' + (data.user ? ', ' + data.user : '') + '. Abriendo archivos…', 'ok');
+
+          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'KIOSK_SESSION', expiresAt: expiresAt });
+          }
+          setTimeout(function () { window.location.href = '/logout'; }, minutes * 60 * 1000);
+
           window.location.href = data.redirect;
         } else if (r.status === 404) {
           setStatus('Tarjeta no registrada', 'err');
@@ -270,25 +335,65 @@
       setTimeout(() => {
         setStatus('Acercá tu tarjeta para ingresar');
         uidEl.textContent = '';
+        catcher.value = '';
+        catcher.focus();
       }, 4000);
+    }
+
+    function normalizeUid(raw) {
+      if (!/Android/.test(navigator.userAgent)) return raw;
+      const bytes = raw.match(/.{2}/g);
+      if (!bytes || bytes.length < 4) return raw;
+      bytes.reverse();
+      return bytes.map(b => {
+        const hi = parseInt(b[0], 16);
+        const lo = parseInt(b[1], 16);
+        return ((lo << 4) | hi).toString(16).padStart(2, '0').toUpperCase();
+      }).join('');
     }
 
     catcher.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
-        const uid = catcher.value.trim();
+        const uid = normalizeUid(catcher.value.trim());
         catcher.value = '';
         if (uid.length >= 4) authenticate(uid);
       }
     });
 
-    // Web NFC (Chrome Android 89+) — si está disponible, aparece botón para activarlo
+    // Captura global de teclas HID (fase captura)
+    document.addEventListener('keydown', function (e) {
+      var active     = document.activeElement;
+      var isCatcher  = (active === catcher);
+      var tag        = active ? active.tagName : 'NONE';
+      var isRealInput = !isCatcher &&
+        (tag === 'INPUT' || tag === 'TEXTAREA' ||
+         (active && active.isContentEditable));
+
+      if (isCatcher)   return;
+      if (isRealInput) return;
+
+      if (e.key === 'Enter') {
+        var uid = normalizeUid(catcher.value.trim());
+        catcher.value = '';
+        if (uid.length >= 4) authenticate(uid);
+        e.preventDefault();
+      } else if (e.key.length === 1) {
+        catcher.value += e.key;
+        e.preventDefault();
+      } else if (e.key === 'Backspace') {
+        catcher.value = catcher.value.slice(0, -1);
+        e.preventDefault();
+      }
+    }, true);
+
+    // Web NFC (Chrome Android 89+)
     if ('NDEFReader' in window) {
       const nfcWrap = document.createElement('div');
       nfcWrap.style.cssText = 'margin-top:.65rem';
       const nfcBtn = document.createElement('button');
       nfcBtn.className = 'btn btn-outline';
       nfcBtn.style.cssText = 'width:100%;font-size:.82rem;padding:.55rem 1rem';
-      nfcBtn.textContent = '📱 Activar NFC (Android)';
+      nfcBtn.textContent = '📦 Activar NFC (Android)';
       nfcWrap.appendChild(nfcBtn);
       document.querySelector('.actions').after(nfcWrap);
 
@@ -298,7 +403,7 @@
           const ndef = new NDEFReader();
           await ndef.scan();
           nfcActive = true;
-          nfcBtn.textContent = '📶 NFC activo — acercá la tarjeta';
+          nfcBtn.textContent = '📦 NFC activo — acercá la tarjeta';
           nfcBtn.style.color = '#16a34a';
           nfcBtn.style.borderColor = '#16a34a';
           ndef.addEventListener('reading', ({ serialNumber }) => {
