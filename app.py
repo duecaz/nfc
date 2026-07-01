@@ -27,7 +27,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "16"
+VERSION              = "17"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -512,6 +512,99 @@ def nc_logout():
 def reset():
     return _cleanup_page(title="Reparando pantalla…",
                          subtitle="Limpiando caché y service workers…")
+
+
+@app.route("/test")
+def test_page():
+    """Página de diagnóstico para el panel (sin DevTools): muestra el UID leído,
+    su forma canónica, si está registrada, y prueba el auto-logout del APK."""
+    html = """<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test NFC - La Nube</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",system-ui,sans-serif}
+  body{background:#0a1628;color:#e2e8f0;min-height:100vh;padding:1.1rem}
+  h1{font-size:1.05rem;margin-bottom:.7rem;color:#38bdf8}
+  .box{background:#0f2442;border:1px solid #1e3a5f;border-radius:12px;padding:1rem;margin-bottom:.7rem}
+  .lbl{font-size:.68rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.2rem}
+  .big{font-family:monospace;font-size:1.5rem;color:#3ddc97;word-break:break-all}
+  .row{display:flex;justify-content:space-between;font-size:.85rem;padding:.22rem 0}
+  .ok{color:#86efac}.err{color:#fca5a5}.mut{color:#94a3b8}
+  button{width:100%;padding:.8rem;margin-top:.5rem;border:none;border-radius:10px;
+    background:#0369a1;color:#fff;font-size:.95rem;font-weight:600}
+  button.warn{background:#7c2d12}
+  #log{font-family:monospace;font-size:.72rem;color:#94a3b8;max-height:28vh;overflow:auto;white-space:pre-wrap}
+  a{color:#38bdf8}
+</style></head>
+<body>
+  <h1>Test NFC + Sesion &middot; v__VER__</h1>
+
+  <div class="box">
+    <div class="lbl">Ultimo UID leido (crudo)</div>
+    <div class="big" id="raw">-</div>
+    <div class="lbl" style="margin-top:.55rem">Canonico (hex)</div>
+    <div class="big" id="canon" style="font-size:1.15rem;color:#7dd3fc">-</div>
+    <div class="row"><span class="mut">Lecturas</span><span id="count">0</span></div>
+    <div class="row"><span class="mut">Registrada?</span><span id="reg" class="mut">-</span></div>
+  </div>
+
+  <div class="box">
+    <div class="row"><span class="mut">Puente APK (AndroidKiosk)</span><span id="bridge" class="err">NO</span></div>
+    <div class="row"><span class="mut">Reloj</span><span id="clock">-</span></div>
+    <button id="t1">Probar auto-logout en 1 min</button>
+    <button id="t0" class="warn">Cancelar timer</button>
+    <div class="row" style="margin-top:.4rem"><span class="mut">Estado sesion</span><span id="sess" class="mut">sin iniciar</span></div>
+  </div>
+
+  <div class="box"><div class="lbl">Log</div><div id="log"></div></div>
+  <p style="text-align:center"><a href="/">volver al kiosko</a></p>
+
+<script>
+  var raw=document.getElementById('raw'),canonEl=document.getElementById('canon'),
+      countEl=document.getElementById('count'),regEl=document.getElementById('reg'),
+      bridgeEl=document.getElementById('bridge'),clockEl=document.getElementById('clock'),
+      sessEl=document.getElementById('sess'),logEl=document.getElementById('log');
+  var n=0, logout_at=0;
+  function log(m){ logEl.textContent=new Date().toLocaleTimeString()+"  "+m+"\\n"+logEl.textContent; }
+  function canonUid(x){
+    var s=String(x||'').replace(/[^0-9A-Fa-f]/g,'').toUpperCase();
+    if(!s) return '';
+    if(/^[0-9]+$/.test(s)){ try{ s=BigInt(s).toString(16).toUpperCase(); }catch(e){} }
+    if(s.length%2) s='0'+s;
+    while(s.length<8) s='0'+s;
+    return s;
+  }
+  // El panel llama authenticate(uid); aca lo MOSTRAMOS en vez de loguear.
+  window.authenticate=function(uid){
+    n++; raw.textContent=uid; canonEl.textContent=canonUid(uid); countEl.textContent=n;
+    log("authenticate('"+uid+"') -> canon "+canonUid(uid));
+    regEl.textContent="consultando..."; regEl.className="mut";
+    fetch('/uid-lookup?uid='+encodeURIComponent(uid)).then(function(r){return r.json();}).then(function(d){
+      if(d.ok){ regEl.textContent="SI - "+(d.name||d.user); regEl.className="ok"; }
+      else { regEl.textContent="NO registrada"; regEl.className="err"; }
+    }).catch(function(){ regEl.textContent="error red"; regEl.className="err"; });
+  };
+  if(window.AndroidKiosk && typeof AndroidKiosk.startSession==='function'){ bridgeEl.textContent="SI"; bridgeEl.className="ok"; }
+  document.getElementById('t1').onclick=function(){
+    if(!(window.AndroidKiosk && AndroidKiosk.startSession)){ log("SIN puente APK (navegador, no kiosko)"); return; }
+    AndroidKiosk.startSession(1); logout_at=Date.now()+60000;
+    log("startSession(1) -> el APK carga /logout en 1 min");
+  };
+  document.getElementById('t0').onclick=function(){
+    if(window.AndroidKiosk && AndroidKiosk.startSession){ AndroidKiosk.startSession(0); logout_at=0; log("timer cancelado"); }
+  };
+  setInterval(function(){
+    clockEl.textContent=new Date().toLocaleTimeString();
+    if(logout_at){ var s=Math.max(0,Math.round((logout_at-Date.now())/1000));
+      sessEl.textContent="logout en "+s+"s"; sessEl.className=s<10?"err":"ok"; }
+  },500);
+  log("Test cargado. Acerca una tarjeta o pulsa el boton de sesion.");
+</script>
+</body></html>"""
+    resp = make_response(html.replace("__VER__", VERSION))
+    resp.headers["Cache-Control"] = "no-store, no-cache"
+    return resp
 
 
 @app.route("/uid-lookup")
