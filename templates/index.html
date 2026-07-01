@@ -144,6 +144,23 @@
       border-color: #0f172a;
       color: #fff;
     }
+    .dur-stepper {
+      display: flex; align-items: center; justify-content: center;
+      gap: .7rem; margin-bottom: .2rem;
+    }
+    .dur-step {
+      width: 2.1rem; height: 2.1rem; border-radius: 50%;
+      border: 1.5px solid #cbd5e1; background: #fff; color: #0f172a;
+      font-size: 1.15rem; font-weight: 700; line-height: 1; cursor: pointer;
+      font-family: inherit; transition: all .15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .dur-step:hover  { border-color: #0f172a; }
+    .dur-step:active { background: #f1f5f9; }
+    .dur-value {
+      min-width: 6.5rem; text-align: center;
+      font-size: 1.05rem; font-weight: 700; color: #0f172a;
+    }
 
     hr {
       border: none;
@@ -226,13 +243,17 @@
 
     <div class="duration-bar">
       <span class="dur-label">Duración de sesión</span>
+      <div class="dur-stepper">
+        <button type="button" class="dur-step" id="dur-minus">&minus;</button>
+        <div class="dur-value" id="dur-value">40 min</div>
+        <button type="button" class="dur-step" id="dur-plus">+</button>
+      </div>
       <div class="dur-chips" id="dur-chips">
-        <button class="dur-chip active" data-min="40">40 min</button>
-        <button class="dur-chip" data-min="80">1h 20min</button>
-        <button class="dur-chip" data-min="120">2h</button>
-        <button class="dur-chip" data-min="160">2h 40min</button>
-        <button class="dur-chip" data-min="200">3h 20min</button>
-        <button class="dur-chip" data-min="240">4h</button>
+        <button type="button" class="dur-chip" data-min="40">40 min</button>
+        <button type="button" class="dur-chip" data-min="120">2h</button>
+        <button type="button" class="dur-chip" data-min="180">3h</button>
+        <button type="button" class="dur-chip" data-min="240">4h</button>
+        <button type="button" class="dur-chip" data-min="0">Desactivado</button>
       </div>
     </div>
 
@@ -289,15 +310,31 @@
       statusEl.className = 'status' + (cls ? ' ' + cls : '');
     }
 
-    // Chip selection
+    // Selector de duración: stepper ±5 min + presets. 0 = Desactivado (sin auto-logout).
+    var sessionMinutes = 40, DUR_MAX = 480, DUR_STEP = 5;
+    function fmtDur(m) {
+      if (m <= 0) return 'Desactivado';
+      if (m < 60) return m + ' min';
+      var h = Math.floor(m / 60), mm = m % 60;
+      return mm ? (h + 'h ' + mm + 'min') : (h + 'h');
+    }
+    function renderDur() {
+      document.getElementById('dur-value').textContent = fmtDur(sessionMinutes);
+      document.querySelectorAll('.dur-chip').forEach(function (c) {
+        c.classList.toggle('active', parseInt(c.dataset.min, 10) === sessionMinutes);
+      });
+    }
+    function setDur(m) {
+      sessionMinutes = Math.max(0, Math.min(DUR_MAX, m));
+      renderDur();
+    }
+    document.getElementById('dur-minus').addEventListener('click', function () { setDur(sessionMinutes - DUR_STEP); });
+    document.getElementById('dur-plus').addEventListener('click',  function () { setDur(sessionMinutes + DUR_STEP); });
     document.getElementById('dur-chips').addEventListener('click', function (e) {
       var chip = e.target.closest('.dur-chip');
-      if (!chip) return;
-      document.querySelectorAll('.dur-chip').forEach(function (c) {
-        c.classList.remove('active');
-      });
-      chip.classList.add('active');
+      if (chip) setDur(parseInt(chip.dataset.min, 10));
     });
+    renderDur();
 
     async function authenticate(uid) {
       setStatus('Verificando…');
@@ -306,19 +343,18 @@
         const r    = await fetch('/auth', { method: 'POST', body: new URLSearchParams({ uid }) });
         const data = await r.json();
         if (data.ok) {
-          var activeChip = document.querySelector('.dur-chip.active');
-          var minutes    = activeChip ? parseInt(activeChip.dataset.min, 10) : 40;
-          var expiresAt  = Date.now() + minutes * 60 * 1000;
+          var minutes = sessionMinutes;   // 0 = Desactivado (sin auto-logout)
 
           setStatus('Bienvenido' + (data.user ? ', ' + data.user : '') + '. Abriendo archivos…', 'ok');
 
           // Cierre de sesión GARANTIZADO por el APK: timer nativo que sobrevive a la
-          // navegación a Nextcloud (el setTimeout de esta página moriría al navegar).
+          // navegación a Nextcloud. minutes=0 => el APK cancela (sesión sin límite).
           if (window.AndroidKiosk && typeof AndroidKiosk.startSession === 'function') {
             try { AndroidKiosk.startSession(minutes); } catch (e) {}
           }
           // Respaldo para navegadores sin APK (PC/Windows): el SW cierra al navegar tras expirar.
-          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          if (minutes > 0 && navigator.serviceWorker && navigator.serviceWorker.controller) {
+            var expiresAt = Date.now() + minutes * 60 * 1000;
             navigator.serviceWorker.controller.postMessage({ type: 'KIOSK_SESSION', expiresAt: expiresAt });
           }
 
