@@ -39,7 +39,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "21"
+VERSION              = "22"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -337,7 +337,7 @@ def index():
 
 
 @app.route("/auth", methods=["POST"])
-@limiter.limit("12 per minute", key_func=_auth_key,
+@limiter.limit("20 per minute", key_func=_auth_key,
                error_message="Demasiados intentos con esta tarjeta. Esperá un momento.")
 def auth():
     uid = (request.form.get("uid") or "").strip()

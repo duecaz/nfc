@@ -5,6 +5,9 @@ Plataforma de acceso para docentes por **tarjeta NFC** en pantallas interactivas
 kiosko corre en un APK Android que lee el NFC del panel y en un backend Flask
 en una Raspberry Pi.
 
+> ⚠️ **Este repo es un prototipo de testeo.** La versión de producción se hará
+> desde cero con las lecciones de [docs/auditoria.md](docs/auditoria.md).
+
 ## Estructura
 
 | Carpeta | Qué es |
@@ -20,6 +23,7 @@ en una Raspberry Pi.
 - **[docs/arquitectura.md](docs/arquitectura.md)** — infraestructura Pi, Nextcloud, Cloudflare, servicios.
 - **[docs/deploy-pi.md](docs/deploy-pi.md)** — cómo desplegar la web y compilar/instalar el APK.
 - **[docs/nfc-droidlogic.md](docs/nfc-droidlogic.md)** — cómo se lee el NFC del panel (DexClassLoader) y cómo mejorar.
+- **[docs/auditoria.md](docs/auditoria.md)** — auditoría de estabilidad para flota + guía para la versión de producción.
 - **[docs/referencia-fabricante/](docs/referencia-fabricante/)** — material del programador: `NFCKit-Usage.md`, `NfcKit.kt`, `classes.jar` (stub de firmas, **no** se usa en runtime).
 - **[CLAUDE.md](CLAUDE.md)** — contexto para asistentes de IA.
 
