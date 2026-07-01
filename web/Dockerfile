@@ -10,4 +10,7 @@ COPY templates ./templates
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--workers=2", "--bind=0.0.0.0:5000", "--timeout=30", "app:app"]
+# I/O-bound (cada /auth espera a Nextcloud): pocos workers + muchos threads.
+# 2 workers x 8 threads = ~16 logins concurrentes (antes: 2).
+CMD ["gunicorn", "--workers=2", "--threads=8", "--worker-class=gthread", \
+     "--bind=0.0.0.0:5000", "--timeout=30", "app:app"]

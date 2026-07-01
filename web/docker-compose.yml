@@ -5,9 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "8200:5000"
-    environment:
-      - NEXTCLOUD_URL=http://192.168.1.50:8181
-      - NEXTCLOUD_PUBLIC_URL=https://lanube.uno/app
-      - ADMIN_PASSWORD=Colegio2026!
+    # Config y secretos en .env (NO versionado). Ver .env.example.
+    env_file:
+      - .env
     volumes:
       - ./users.json:/app/users.json

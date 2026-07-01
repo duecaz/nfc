@@ -17,8 +17,20 @@ from flask import (
 )
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
+# Detras de nginx + Cloudflare: usar la IP real del cliente (X-Forwarded-For),
+# no la del proxy. Sin esto el rate-limit y los logs ven a TODA la flota como 1 IP.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+
+def _auth_key():
+    """Rate-limit de /auth por UID de tarjeta (no por IP): así una tarjeta no se
+    puede repetir en rafaga, pero NO se limita a toda la flota (que comparte IP
+    publica detras del tunel)."""
+    return (request.form.get("uid") or "").strip() or get_remote_address()
+
 
 limiter = Limiter(
     get_remote_address,
@@ -27,7 +39,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "20"
+VERSION              = "21"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -325,8 +337,8 @@ def index():
 
 
 @app.route("/auth", methods=["POST"])
-@limiter.limit("30 per minute",
-               error_message="Demasiados intentos. Esperá un momento.")
+@limiter.limit("12 per minute", key_func=_auth_key,
+               error_message="Demasiados intentos con esta tarjeta. Esperá un momento.")
 def auth():
     uid = (request.form.get("uid") or "").strip()
     if not uid:

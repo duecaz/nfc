@@ -16,3 +16,7 @@ local.properties
 
 # Varios
 .DS_Store
+
+# secretos
+web/.env
+.env

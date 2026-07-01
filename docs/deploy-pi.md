@@ -21,8 +21,38 @@ sleep 5 && curl -s http://localhost:8200/health
 - Si el panel muestra la versión vieja: el service worker cachea el HTML →
   abrir `lanube.uno/reset` (en incógnito siempre se ve la real).
 
+- **Rutina** (cambios de código): con el `curl` de arriba (app.py + templates) alcanza.
+- **Infra** (Dockerfile / docker-compose / gunicorn): cambian poco; cuando cambian hay
+  que curlear tambien esos archivos (ver abajo).
+
 > `web/users.json.example` es solo plantilla. El `users.json` real vive en la Pi
 > (`~/docker/kiosk/users.json`, montado como volumen) y **no** se versiona.
+
+### Secretos en `.env` (obligatorio desde v21)
+
+`docker-compose.yml` ya no trae los secretos inline; los lee de `~/docker/kiosk/.env`
+(no versionado). Crear una vez en la Pi:
+
+```bash
+cd ~/docker/kiosk
+cat > .env <<'EOF'
+NEXTCLOUD_URL=http://192.168.1.50:8181
+NEXTCLOUD_PUBLIC_URL=https://lanube.uno/app
+ADMIN_PASSWORD=TU_CLAVE_ADMIN
+EOF
+chmod 600 .env
+```
+
+### Migración de infra (una vez, para aplicar gunicorn+threads y el .env)
+
+```bash
+cd ~/docker/kiosk
+curl -o Dockerfile          "https://raw.githubusercontent.com/duecaz/nfc/main/web/Dockerfile"
+curl -o docker-compose.yml  "https://raw.githubusercontent.com/duecaz/nfc/main/web/docker-compose.yml"
+# (crear .env como arriba si no existe)
+docker compose down && docker compose build --no-cache && docker compose up -d
+sleep 5 && curl -s http://localhost:8200/health
+```
 
 ## APK (.NET) → panel
 
