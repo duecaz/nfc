@@ -23,7 +23,7 @@ public class MainActivity : Activity
 
     private const string KioskUrl       = "https://lanube.uno";
     private const string LogTag         = "LaNubeKiosk";
-    private const string ApkVersion     = "5";
+    private const string ApkVersion     = "6";
     private const int    FileChooserCode = 1001;
 
     protected override void OnCreate(Bundle? savedInstanceState)
