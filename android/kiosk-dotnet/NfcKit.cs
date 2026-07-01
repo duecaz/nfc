@@ -13,10 +13,10 @@ internal static class NfcKit
 {
     private const string Tag        = "NfcKit";
     private const int    RegAddr    = 0x21;
-    private const int    PollMs     = 50;   // i2c_read medido en ~1.7ms -> pollear rapido es gratis
-    private const int    RearmPolls = 4;    // ~200ms sin tarjeta para re-armar el disparo
-    private const int    RetryPolls = 40;   // ~2s entre reintentos de carga
-    private const int    HbPolls    = 50;   // heartbeat de diagnostico (~2.5s)
+    private const int    PollMs     = 100;  // sweet spot: 1a lectura fiable + rapido (i2c_read ~1.7ms)
+    private const int    RearmPolls = 3;    // ~300ms sin tarjeta para re-armar el disparo
+    private const int    RetryPolls = 20;   // ~2s entre reintentos de carga
+    private const int    HbPolls    = 25;   // heartbeat de diagnostico (~2.5s)
 
     public static bool UseV2Chipset = false;
     public static int  I2cAddr      = 0xA6;
