@@ -11,6 +11,7 @@ from functools import wraps
 from pathlib import Path
 
 import requests
+from datetime import datetime, timezone
 from flask import (
     Flask, jsonify, make_response, redirect,
     render_template, request, url_for,
@@ -39,7 +40,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "22"
+VERSION              = "23"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -136,6 +137,37 @@ def find_user(uid):
             if canon_uid(k) == target:
                 return k, v
     return None, None
+
+
+# ---------------------------------------------------------------------------
+# Monitoreo de paneles (heartbeat) — inventario en vivo, efimero en el contenedor
+# ---------------------------------------------------------------------------
+
+_panels_lock = threading.Lock()
+PANELS_FILE  = Path(__file__).parent / "panels.json"
+
+
+def _load_panels():
+    with _panels_lock:
+        if PANELS_FILE.exists():
+            try:
+                return json.loads(PANELS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                return {}
+        return {}
+
+
+def _save_panel(pid, info):
+    with _panels_lock:
+        data = {}
+        if PANELS_FILE.exists():
+            try:
+                data = json.loads(PANELS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                data = {}
+        data[pid] = info
+        PANELS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False),
+                               encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -431,6 +463,70 @@ def health():
         nextcloud=NEXTCLOUD_URL, public=NEXTCLOUD_PUBLIC_URL,
         cookie_domain=COOKIE_DOMAIN,
     )
+
+
+@app.route("/panel-ping", methods=["POST"])
+@limiter.limit("6 per minute", key_func=lambda: (request.form.get("id") or get_remote_address()))
+def panel_ping():
+    """Heartbeat del APK: registra version + estado NFC + ultima vez visto."""
+    pid = (request.form.get("id") or "").strip()[:64]
+    if not pid:
+        return jsonify(ok=False), 400
+    _save_panel(pid, {
+        "apk":  (request.form.get("apk") or "?").strip()[:16],
+        "nfc":  (request.form.get("nfc") or "?").strip()[:8],
+        "ip":   get_remote_address(),
+        "seen": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    })
+    return jsonify(ok=True)
+
+
+@app.route("/admin/panels")
+@require_admin
+def admin_panels():
+    """Tabla de estado de la flota (online/offline, version, NFC)."""
+    panels = _load_panels()
+    now = datetime.now(timezone.utc)
+    rows = ""
+    online = 0
+    for pid, p in sorted(panels.items(), key=lambda kv: kv[0]):
+        try:
+            mins = (now - datetime.fromisoformat(p.get("seen", ""))).total_seconds() / 60
+        except Exception:
+            mins = 1e9
+        is_on = mins < 10
+        online += 1 if is_on else 0
+        dot = "#3ddc97" if is_on else "#f87171"
+        estado = "online" if is_on else f"hace {int(mins)} min" if mins < 1e8 else "?"
+        nfc = p.get("nfc", "?")
+        nfc_col = "#86efac" if nfc == "ok" else "#fca5a5" if nfc == "fail" else "#94a3b8"
+        rows += (f"<tr><td><span style='color:{dot}'>&#9679;</span> {pid[:16]}</td>"
+                 f"<td>v{p.get('apk','?')}</td>"
+                 f"<td style='color:{nfc_col}'>{nfc}</td>"
+                 f"<td>{p.get('ip','?')}</td>"
+                 f"<td>{estado}</td></tr>")
+    if not rows:
+        rows = "<tr><td colspan='5' style='color:#64748b'>Sin paneles todavía (esperá el primer heartbeat).</td></tr>"
+    html = f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Paneles - La Nube</title><style>
+ body{{font-family:"Segoe UI",system-ui,sans-serif;background:#0a1628;color:#e2e8f0;padding:1.2rem}}
+ h1{{font-size:1.15rem;color:#38bdf8;margin-bottom:.3rem}}
+ .sub{{color:#64748b;font-size:.85rem;margin-bottom:1rem}}
+ table{{width:100%;border-collapse:collapse;font-size:.88rem}}
+ th,td{{text-align:left;padding:.5rem .6rem;border-bottom:1px solid #1e3a5f}}
+ th{{color:#94a3b8;text-transform:uppercase;font-size:.7rem;letter-spacing:.04em}}
+ a{{color:#38bdf8}}
+</style></head><body>
+ <h1>Paneles de la flota</h1>
+ <div class="sub">{online} online / {len(panels)} totales &middot; refresca cada 30s &middot; server v{VERSION}</div>
+ <table><tr><th>Panel</th><th>APK</th><th>NFC</th><th>IP</th><th>Estado</th></tr>{rows}</table>
+ <p style="margin-top:1rem"><a href="/admin">&larr; admin</a></p>
+ <script>setTimeout(function(){{location.reload()}},30000)</script>
+</body></html>"""
+    resp = make_response(html)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.route("/login")

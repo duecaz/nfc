@@ -30,6 +30,9 @@ internal static class NfcKit
     private static volatile bool   _ready;
     private static          Context?        _appCtx;
 
+    /// <summary>true si el driver droidlogic cargó y el bus quedó listo.</summary>
+    public static bool IsReady => _ready;
+
     private static IntPtr _cls          = IntPtr.Zero;  // referencia GLOBAL (valida entre hilos)
     private static IntPtr _loadMethod   = IntPtr.Zero;
     private static IntPtr _readMethod   = IntPtr.Zero;

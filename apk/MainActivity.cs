@@ -3,6 +3,7 @@ using Android.Content;
 using Android.Content.PM;
 using Android.Nfc;
 using Android.OS;
+using Android.Runtime;
 using Android.Views;
 using Android.Webkit;
 
@@ -21,15 +22,24 @@ public class MainActivity : Activity
     private DownloadReceiver? _downloadReceiver;
     private readonly System.Collections.Generic.HashSet<long> _activeDownloads = new();
     private int _sessionGen;   // invalida timers de sesión previos
+    private System.Threading.Timer? _heartbeat;
+    private static readonly System.Net.Http.HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
     private const string KioskUrl       = "https://lanube.uno";
     private const string LogTag         = "LaNubeKiosk";
-    private const string ApkVersion     = "8";
+    private const string ApkVersion     = "9";
     private const int    FileChooserCode = 1001;
+    // Lock Task (kiosko bloqueado): activar SOLO con MDM device-owner + whitelist
+    // de las apps de archivos; si no, rompe subir/abrir archivos. Ver docs/auditoria.md.
+    private const bool   KioskLock      = false;
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+        // Auto-reinicio ante crash: relanza el kiosko en ~1.5s (ver ScheduleRestart).
+        AndroidEnvironment.UnhandledExceptionRaiser += (s, e) => ScheduleRestart();
+        AppDomain.CurrentDomain.UnhandledException  += (s, e) => ScheduleRestart();
+
         Window!.AddFlags(WindowManagerFlags.KeepScreenOn);
 
         webView = new WebView(this);
@@ -66,6 +76,10 @@ public class MainActivity : Activity
             RegisterReceiver(_downloadReceiver, dlFilter);
 #pragma warning restore CA1416
 
+        // Heartbeat de monitoreo: primer envio a los 15s, luego cada 5 min.
+        _heartbeat = new System.Threading.Timer(SendHeartbeat, null,
+            TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(5));
+
         HideSystemUI();
     }
 
@@ -73,11 +87,58 @@ public class MainActivity : Activity
     {
         base.OnDestroy();
         CancelSessionTimer();
+        _heartbeat?.Dispose();
+        _heartbeat = null;
         if (_downloadReceiver != null)
         {
             UnregisterReceiver(_downloadReceiver);
             _downloadReceiver = null;
         }
+    }
+
+    // ---- Auto-reinicio ante crash: relanza el kiosko en ~1.5s ----
+    private void ScheduleRestart()
+    {
+        try
+        {
+            var intent = PackageManager?.GetLaunchIntentForPackage(PackageName!);
+            if (intent == null) return;
+            var flags = Build.VERSION.SdkInt >= BuildVersionCodes.S
+                ? PendingIntentFlags.OneShot | PendingIntentFlags.Immutable
+                : PendingIntentFlags.OneShot;
+            var pi = PendingIntent.GetActivity(this, 0, intent, flags);
+            var am = (AlarmManager?)GetSystemService(AlarmService);
+            am?.Set(AlarmType.Rtc, Java.Lang.JavaSystem.CurrentTimeMillis() + 1500, pi);
+            Android.Util.Log.Error(LogTag, "Crash detectado -> reinicio programado");
+        }
+        catch { }
+    }
+
+    // ---- Heartbeat de monitoreo: POST /panel-ping (id, apk, nfc) ----
+    private async void SendHeartbeat(object? state)
+    {
+        try
+        {
+            var data = new System.Collections.Generic.Dictionary<string, string>
+            {
+                ["id"]  = PanelId(),
+                ["apk"] = ApkVersion,
+                ["nfc"] = NfcKit.IsReady ? "ok" : "fail",
+            };
+            using var content = new System.Net.Http.FormUrlEncodedContent(data);
+            await _http.PostAsync(KioskUrl + "/panel-ping", content);
+        }
+        catch { /* offline: reintenta en el proximo ciclo */ }
+    }
+
+    private string PanelId()
+    {
+        try
+        {
+            return Android.Provider.Settings.Secure.GetString(
+                ContentResolver, Android.Provider.Settings.Secure.AndroidId) ?? "?";
+        }
+        catch { return "?"; }
     }
 
     // ---- Timer nativo de sesión (cierre garantizado, sobrevive a la navegación) ----
@@ -149,6 +210,13 @@ public class MainActivity : Activity
     protected override void OnResume()
     {
         base.OnResume();
+
+        // Kiosko bloqueado (opt-in; requiere MDM device-owner para ser inviolable).
+        if (KioskLock)
+        {
+            try { StartLockTask(); }
+            catch (Exception ex) { Android.Util.Log.Warn(LogTag, "LockTask: " + ex.Message); }
+        }
 
         // Standard Android NFC (USB readers, regular phones/tablets)
         if (nfcAdapter != null)

@@ -45,8 +45,8 @@ sino **Nextcloud + la Pi** (ver §4).
 | # | Tema | Plan |
 |---|---|---|
 | 8 | Actualizar APK panel por panel. | Se usará el **DMS/MDM** para desplegar el APK (ver §6). |
-| 9 | Kiosko no bloqueado / sin auto-reinicio. | **Lock Task Mode** + auto-restart vía MDM (ver §6). |
-| 10 | Sin monitoreo central de paneles. | Heartbeat + panel de estado, o el dashboard del MDM (ver §6). |
+| 9 | Kiosko no bloqueado / sin auto-reinicio. | ✅ **Auto-reinicio ante crash** implementado (v9). Lock Task = *hook* opt-in; bloqueo real vía MDM (ver §6). |
+| 10 | Sin monitoreo central de paneles. | ✅ **Heartbeat** implementado: el APK pinguea `/panel-ping` c/5 min; estado en `/admin/panels`. |
 | 11 | `users.json` como “BD”. | Pocos al inicio, OK. Producción → SQLite/Postgres. |
 
 ---
@@ -132,22 +132,24 @@ Toda la flota depende de una Pi. Para producción:
 En vez de `adb install` panel por panel, subir el APK firmado al MDM y empujarlo
 a todos. El MDM también fija versión y evita drift.
 
-### Kiosko inviolable + auto-reinicio (#9)
-- **Lock Task Mode** (screen pinning / modo kiosco): bloquea el panel a **nuestra
-  app**; el usuario no puede salir a Ajustes, otras apps ni al home. Requiere que
-  la app sea **device owner** — se logra con el **MDM** (o `dpm set-device-owner`
-  en aprovisionamiento). Con el MDM esto viene “de fábrica”.
-- **Auto-reinicio:** si la app crashea, que vuelva sola. El modo kiosco del MDM lo
-  hace; alternativa: registrar la app como **HOME/launcher** para que Android la
-  relance.
+### Kiosko inviolable + auto-reinicio (#9) — implementado (v9)
+- **Auto-reinicio ante crash** ✅: `MainActivity` engancha las excepciones no
+  controladas y **relanza el kiosko en ~1.5 s** vía `AlarmManager` (método
+  `ScheduleRestart`). Una caída ya no deja el panel muerto.
+- **Lock Task Mode**: hay un *hook* (`KioskLock`, **apagado por defecto**). El
+  lock-task estricto **bloquea abrir/subir archivos** (Nextcloud usa apps
+  externas), así que el bloqueo real se hace con el **MDM** (device-owner +
+  `setLockTaskPackages` incluyendo las apps de archivos). Con MDM se activa
+  `KioskLock=true` sin romper nada.
 
-### Monitoreo central (#10)
-Con muchos paneles no podés ir a cada uno. Opciones:
-- **Dashboard del MDM**: la mayoría muestra online/offline + versión de app
-  instalada. Si el MDM lo da, quizás no haga falta nada más.
-- **Heartbeat propio**: cada panel hace `POST /panel-ping` cada X min con su id +
-  versión + hora; el server guarda “última vez visto” y una página admin lista
-  paneles (online/offline, versión). Barato y da inventario propio.
+### Monitoreo central (#10) — implementado (v23)
+- **Heartbeat propio** ✅: cada panel hace `POST /panel-ping` cada 5 min con su
+  **id** (ANDROID_ID), **versión de APK** y **estado NFC** (ok/fail). El server
+  guarda “última vez visto” + IP en `panels.json` (efímero).
+- **Vista**: `/admin/panels` (dentro del admin) muestra la tabla de la flota:
+  online/offline, versión y NFC de cada panel. Se refresca sola cada 30 s.
+- Complementario al **dashboard del MDM** (online/offline + versión), que también
+  sirve como monitoreo.
 
 ---
 
