@@ -9,4 +9,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ./users.json:/app/users.json
+      - ./users.json:/app/users.json   # legado: solo para la migracion inicial a SQLite
+      - ./data:/app/data               # kiosk.db (tarjetas, paneles, config) — v25

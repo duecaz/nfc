@@ -22,3 +22,4 @@ web/.env
 .env
 web/panels.json
 web/monitor.flag
+web/data/

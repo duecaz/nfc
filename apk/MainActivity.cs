@@ -27,8 +27,10 @@ public class MainActivity : Activity
 
     private const string KioskUrl       = "https://lanube.uno";
     private const string LogTag         = "LaNubeKiosk";
-    private const string ApkVersion     = "10";
+    private const string ApkVersion     = "11";
     private const int    FileChooserCode = 1001;
+    // F5: debe coincidir con PANEL_SECRET del .env de la Pi.
+    private const string PanelSecret    = "lanube-panel-2026";
     // Lock Task (kiosko bloqueado): activar SOLO con MDM device-owner + whitelist
     // de las apps de archivos; si no, rompe subir/abrir archivos. Ver docs/auditoria.md.
     private const bool   KioskLock      = false;
@@ -124,9 +126,11 @@ public class MainActivity : Activity
         {
             var data = new System.Collections.Generic.Dictionary<string, string>
             {
-                ["id"]  = PanelId(),
-                ["apk"] = ApkVersion,
-                ["nfc"] = NfcKit.IsReady ? "ok" : "fail",
+                ["id"]     = PanelId(),
+                ["apk"]    = ApkVersion,
+                ["nfc"]    = NfcKit.IsReady ? "ok" : "fail",
+                ["ram"]    = DeviceRam(),      // "usado/total MB" (F8)
+                ["secret"] = PanelSecret,      // F5
             };
             using var content = new System.Net.Http.FormUrlEncodedContent(data);
             var resp = await _http.PostAsync(KioskUrl + "/panel-ping", content);
@@ -146,14 +150,40 @@ public class MainActivity : Activity
         catch { /* offline: reintenta en el proximo ciclo */ }
     }
 
+    // Id del panel = MAC de la red cableada (F7: estable e unica por equipo,
+    // a diferencia de ANDROID_ID que puede venir clonado de fabrica).
+    private string? _panelId;
     private string PanelId()
     {
+        if (_panelId != null) return _panelId;
         try
         {
-            return Android.Provider.Settings.Secure.GetString(
+            var mac = System.IO.File.ReadAllText("/sys/class/net/eth0/address").Trim();
+            if (!string.IsNullOrEmpty(mac) && mac != "00:00:00:00:00:00")
+                return _panelId = mac.Replace(":", "").ToUpperInvariant();
+        }
+        catch { }
+        try
+        {
+            return _panelId = Android.Provider.Settings.Secure.GetString(
                 ContentResolver, Android.Provider.Settings.Secure.AndroidId) ?? "?";
         }
         catch { return "?"; }
+    }
+
+    // RAM del equipo: "usado/total MB" para la tabla de /admin/panels (F8).
+    private string DeviceRam()
+    {
+        try
+        {
+            var am = (ActivityManager?)GetSystemService(ActivityService);
+            if (am == null) return "";
+            var mi = new ActivityManager.MemoryInfo();
+            am.GetMemoryInfo(mi);
+            long used = (mi.TotalMem - mi.AvailMem) / 1048576, tot = mi.TotalMem / 1048576;
+            return $"{used}/{tot} MB";
+        }
+        catch { return ""; }
     }
 
     // ---- Timer nativo de sesión (cierre garantizado, sobrevive a la navegación) ----

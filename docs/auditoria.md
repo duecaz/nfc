@@ -211,3 +211,30 @@ Lo que **funcionó bien** y hay que conservar:
 1. DNS local (F1) → 2. escritura atómica (F2) → 3. backups+alerta (F3) →
 4. secreto panel-ping (F5) → 5. soak test (F8) → 6. despliegue por MDM +
 Lock Task device-owner → (producción) F6, Redis, SQLite, tokens cifrados.
+
+---
+
+## 9. Decisiones del cliente sobre F1–F9 (y estado de implementación)
+
+| # | Decisión / aclaración | Estado |
+|---|---|---|
+| **F1** | ⚠️ **Aclaración de topología**: en producción los paneles del colegio **NO están en la misma red que la Pi** (192.168.1.x es la red local de la Pi, no existe en el colegio). El atajo por DNS local **solo es posible si el servidor se instala físicamente en el colegio**. El dominio `lanube.uno` NUNCA cambia (Nextcloud valida por `trusted_domains`, que ya incluye el dominio — la regla DNS solo cambia *a qué IP* apunta ese dominio dentro del edificio, no el nombre). **Decisión pendiente**: dónde vivirá el servidor de producción. Recomendación: **en el colegio** (ver F3). | 📋 Decisión de despliegue |
+| **F2** | **SQLite aprobado e implementado (v25)**: `web/data/kiosk.db` reemplaza `users.json` y `panels.json`. Tablas `cards`, `panels`, `config` (flag de monitoreo). WAL + busy_timeout → transacciones seguras entre los 3 workers. **Migración automática**: al primer arranque importa `users.json` si la tabla está vacía. Probado con 3 procesos escribiendo a la vez sin corrupción. | ✅ v25 |
+| **F3** | Respaldo: propuesta = **producción en mini-PC x86 (Intel N100, 16 GB, NVMe, ~150-250 USD)** instalado EN el colegio (resuelve F1 y da 2-3× el rendimiento de la Pi para Nextcloud), y **la Pi 5 actual pasa a ser el standby/espejo** (restauración en minutos) + backup diario automatizado a otro medio. Alternativa más barata: segunda Pi 5 como standby. | 📋 Para producción |
+| **F4** | Aclaración MariaDB vs SQLite — **son para cosas distintas y coexisten**: SQLite = la tablita del kiosko (tarjetas/paneles, nuestra app). MariaDB = la base **interna de Nextcloud** (NC desaconseja SQLite para multiusuario). Ambas recomendaciones siguen vigentes. | 📋 Tuning NC pendiente |
+| **F5** | Secreto compartido implementado: el APK manda `secret` en cada `/panel-ping`; el server lo exige si `PANEL_SECRET` está definido en `.env` (vacío = compatibilidad). Tope de inventario: 200 paneles (se expulsa el más viejo). | ✅ v25/apk11 |
+| **F6** | **Aceptado como diseño**: el flujo normal es que el docente use "Cerrar sesión" de Nextcloud (que ya intercepta `/logout` y vuelve al kiosko) o expire el timer. No se cambia en el prototipo. | ✅ Aceptado |
+| **F7** | Id de panel = **MAC de la red cableada** (`/sys/class/net/eth0/address`), con ANDROID_ID como fallback. | ✅ apk11 |
+| **F8** | Supervisión de paneles: el heartbeat ahora manda **RAM usada/total del panel**; se muestra por panel en `/admin/panels`. | ✅ v25/apk11 |
+| **F9** | Supervisión de la Pi: `/admin/panels` muestra tiles de **carga CPU (load), RAM, disco y temperatura** de la Pi con umbral rojo (load>3, RAM>85%, disco>85%, temp>75°C). Docker no aísla `/proc`, así que las cifras son del host real. | ✅ v25 |
+
+### Migración de infra para v25 (una vez, en la Pi)
+
+```bash
+cd ~/docker/kiosk
+curl -o docker-compose.yml "https://raw.githubusercontent.com/duecaz/nfc/main/web/docker-compose.yml"
+mkdir -p data
+echo "PANEL_SECRET=lanube-panel-2026" >> .env    # mismo valor que PanelSecret del APK
+# luego el deploy normal (curl app.py+templates + rebuild). Al arrancar veras en logs:
+# [DB] migradas N tarjetas desde users.json
+```

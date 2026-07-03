@@ -5,8 +5,10 @@ import json
 import os
 import re
 import secrets
-import threading
+import shutil
+import sqlite3
 import xml.etree.ElementTree as ET
+from contextlib import closing
 from functools import wraps
 from pathlib import Path
 
@@ -40,12 +42,13 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "24"
+VERSION              = "25"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
 COOKIE_SECURE        = NEXTCLOUD_PUBLIC_URL.startswith("https")
 ADMIN_PASSWORD       = os.environ.get("ADMIN_PASSWORD", "admin1234")
+PANEL_SECRET         = os.environ.get("PANEL_SECRET", "")
 
 _ADMIN_SESSION = secrets.token_hex(32)
 
@@ -77,34 +80,58 @@ _CLEANUP_JS = """\
 """
 
 # ---------------------------------------------------------------------------
-# users.json — cache por mtime, escritura con lock
+# Almacenamiento SQLite (v25, F2) — transacciones ACID seguras entre procesos.
+# Reemplaza users.json/panels.json; migra users.json automaticamente 1 vez.
 # ---------------------------------------------------------------------------
 
-_users_lock  = threading.Lock()
-_users_cache = None
-_users_mtime = 0.0
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_FILE = DATA_DIR / "kiosk.db"
+
+
+def _db():
+    con = sqlite3.connect(DB_FILE, timeout=10)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA busy_timeout=5000")
+    return con
+
+
+def _init_db():
+    with closing(_db()) as con, con:
+        con.execute("CREATE TABLE IF NOT EXISTS cards("
+                    "uid TEXT PRIMARY KEY, user TEXT, name TEXT, token TEXT)")
+        con.execute("CREATE TABLE IF NOT EXISTS panels("
+                    "id TEXT PRIMARY KEY, apk TEXT, nfc TEXT, ip TEXT, seen TEXT, ram TEXT)")
+        con.execute("CREATE TABLE IF NOT EXISTS config(k TEXT PRIMARY KEY, v TEXT)")
+        # migracion unica desde users.json (si la tabla esta vacia)
+        if con.execute("SELECT COUNT(*) FROM cards").fetchone()[0] == 0 and USERS_FILE.exists():
+            try:
+                old = json.loads(USERS_FILE.read_text(encoding="utf-8"))
+                rows = [(u, r.get("user", ""), r.get("name", r.get("user", "")),
+                         r.get("token", "")) for u, r in old.items()
+                        if not u.startswith("EJEMPLO")]
+                con.executemany("INSERT OR REPLACE INTO cards VALUES(?,?,?,?)", rows)
+                print(f"[DB] migradas {len(rows)} tarjetas desde users.json", flush=True)
+            except Exception as exc:
+                print(f"[DB] migracion users.json fallo: {exc}", flush=True)
+
+
+_init_db()
 
 
 def load_users():
-    global _users_cache, _users_mtime
-    with _users_lock:
-        if USERS_FILE.exists():
-            mtime = USERS_FILE.stat().st_mtime
-            if _users_cache is None or mtime > _users_mtime:
-                _users_cache = json.loads(USERS_FILE.read_text(encoding="utf-8"))
-                _users_mtime = mtime
-            return dict(_users_cache)
-        return {}
+    with closing(_db()) as con:
+        rows = con.execute("SELECT uid, user, name, token FROM cards").fetchall()
+    return {u: {"user": us, "name": nm, "token": tk} for u, us, nm, tk in rows}
 
 
 def save_users(users):
-    global _users_cache, _users_mtime
-    with _users_lock:
-        USERS_FILE.write_text(
-            json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-        _users_cache = dict(users)
-        _users_mtime = USERS_FILE.stat().st_mtime
+    """Reemplaza el set completo en UNA transaccion (atomico entre procesos)."""
+    with closing(_db()) as con, con:
+        con.execute("DELETE FROM cards")
+        con.executemany("INSERT INTO cards VALUES(?,?,?,?)",
+                        [(u, r.get("user", ""), r.get("name", r.get("user", "")),
+                          r.get("token", "")) for u, r in users.items()])
 
 
 def canon_uid(raw):
@@ -143,50 +170,37 @@ def find_user(uid):
 # Monitoreo de paneles (heartbeat) — inventario en vivo, efimero en el contenedor
 # ---------------------------------------------------------------------------
 
-_panels_lock = threading.Lock()
-PANELS_FILE  = Path(__file__).parent / "panels.json"
+PING_OFF = 600   # seg cuando el monitoreo esta APAGADO (10 min)
+PING_ON  = 60    # seg cuando esta ENCENDIDO (soporte, 1 min)
+PANELS_MAX = 200  # tope de inventario (F5): se expulsa el mas viejo
 
 
 def _load_panels():
-    with _panels_lock:
-        if PANELS_FILE.exists():
-            try:
-                return json.loads(PANELS_FILE.read_text(encoding="utf-8"))
-            except Exception:
-                return {}
-        return {}
+    with closing(_db()) as con:
+        rows = con.execute("SELECT id, apk, nfc, ip, seen, ram FROM panels").fetchall()
+    return {r[0]: {"apk": r[1], "nfc": r[2], "ip": r[3], "seen": r[4],
+                   "ram": r[5] or ""} for r in rows}
 
 
 def _save_panel(pid, info):
-    with _panels_lock:
-        data = {}
-        if PANELS_FILE.exists():
-            try:
-                data = json.loads(PANELS_FILE.read_text(encoding="utf-8"))
-            except Exception:
-                data = {}
-        data[pid] = info
-        PANELS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False),
-                               encoding="utf-8")
-
-
-# Monitoreo bajo demanda: OFF = baseline (paneles pinguean espaciado, carga
-# minima); ON = soporte en vivo (paneles pinguean seguido). El intervalo viaja
-# en la respuesta del ping y el panel se auto-ajusta.
-MONITOR_FILE = Path(__file__).parent / "monitor.flag"
-PING_OFF = 600   # seg cuando el monitoreo esta APAGADO (10 min)
-PING_ON  = 60    # seg cuando esta ENCENDIDO (soporte, 1 min)
+    with closing(_db()) as con, con:
+        con.execute("INSERT OR REPLACE INTO panels VALUES(?,?,?,?,?,?)",
+                    (pid, info.get("apk"), info.get("nfc"), info.get("ip"),
+                     info.get("seen"), info.get("ram", "")))
+        con.execute("DELETE FROM panels WHERE id NOT IN "
+                    "(SELECT id FROM panels ORDER BY seen DESC LIMIT ?)", (PANELS_MAX,))
 
 
 def _monitor_on():
-    try:
-        return MONITOR_FILE.read_text(encoding="utf-8").strip() == "1"
-    except Exception:
-        return False
+    with closing(_db()) as con:
+        row = con.execute("SELECT v FROM config WHERE k='monitor'").fetchone()
+    return bool(row and row[0] == "1")
 
 
 def _set_monitor(on):
-    MONITOR_FILE.write_text("1" if on else "0", encoding="utf-8")
+    with closing(_db()) as con, con:
+        con.execute("INSERT OR REPLACE INTO config VALUES('monitor', ?)",
+                    ("1" if on else "0",))
 
 
 # ---------------------------------------------------------------------------
@@ -488,6 +502,9 @@ def health():
 @limiter.limit("6 per minute", key_func=lambda: (request.form.get("id") or get_remote_address()))
 def panel_ping():
     """Heartbeat del APK: registra version + estado NFC + ultima vez visto."""
+    # F5: si hay secreto configurado, el ping debe traerlo (los ids son gratis de inventar)
+    if PANEL_SECRET and (request.form.get("secret") or "") != PANEL_SECRET:
+        return jsonify(ok=False), 403
     pid = (request.form.get("id") or "").strip()[:64]
     if not pid:
         return jsonify(ok=False), 400
@@ -496,6 +513,7 @@ def panel_ping():
         "nfc":  (request.form.get("nfc") or "?").strip()[:8],
         "ip":   get_remote_address(),
         "seen": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "ram":  (request.form.get("ram") or "").strip()[:24],
     })
     # el panel se auto-ajusta a este intervalo: rapido si el monitoreo esta ON.
     return jsonify(ok=True, interval=PING_ON if _monitor_on() else PING_OFF)
@@ -508,12 +526,57 @@ def admin_panels_monitor():
     return redirect(url_for("admin_panels"))
 
 
+def _pi_health():
+    """Metricas del host para /admin/panels (F9). Docker no aisla /proc/loadavg
+    ni /proc/meminfo, asi que reflejan la Pi real."""
+    h = {}
+    try:
+        la = os.getloadavg()
+        h["load"] = f"{la[0]:.2f} · {la[1]:.2f} · {la[2]:.2f}"
+        h["load_hot"] = la[0] > 3.0   # Pi 5 = 4 nucleos
+    except Exception:
+        pass
+    try:
+        mem = {}
+        for line in open("/proc/meminfo"):
+            k, v = line.split(":", 1)
+            mem[k] = int(v.strip().split()[0])
+        tot, av = mem.get("MemTotal", 0) // 1024, mem.get("MemAvailable", 0) // 1024
+        h["ram"] = f"{tot - av} / {tot} MB"
+        h["ram_hot"] = tot > 0 and (tot - av) / tot > 0.85
+    except Exception:
+        pass
+    try:
+        du = shutil.disk_usage("/")
+        h["disk"] = f"{du.used // 2**30} / {du.total // 2**30} GB"
+        h["disk_hot"] = du.used / du.total > 0.85
+    except Exception:
+        pass
+    try:
+        t = int(open("/sys/class/thermal/thermal_zone0/temp").read().strip()) / 1000
+        h["temp"] = f"{t:.0f} °C"
+        h["temp_hot"] = t > 75
+    except Exception:
+        pass
+    return h
+
+
 @app.route("/admin/panels")
 @require_admin
 def admin_panels():
     """Tabla de estado de la flota (online/offline, version, NFC)."""
     panels = _load_panels()
     mon = _monitor_on()
+    hp = _pi_health()
+    def _tile(lbl, key):
+        val = hp.get(key, "?")
+        hot = hp.get(key + "_hot", False)
+        col = "#f87171" if hot else "#3ddc97"
+        return (f"<div style='background:#0f2442;border:1px solid #1e3a5f;border-radius:10px;"
+                f"padding:.5rem .8rem;font-size:.78rem'><span style='color:#64748b'>{lbl}</span> "
+                f"<b style='color:{col}'>{val}</b></div>")
+    tiles = (_tile("Carga Pi", "load") + _tile("RAM Pi", "ram") +
+             _tile("Disco", "disk") + _tile("Temp", "temp"))
     now = datetime.now(timezone.utc)
     rows = ""
     online = 0
@@ -528,13 +591,14 @@ def admin_panels():
         estado = "online" if is_on else f"hace {int(mins)} min" if mins < 1e8 else "?"
         nfc = p.get("nfc", "?")
         nfc_col = "#86efac" if nfc == "ok" else "#fca5a5" if nfc == "fail" else "#94a3b8"
-        rows += (f"<tr><td><span style='color:{dot}'>&#9679;</span> {pid[:16]}</td>"
+        rows += (f"<tr><td><span style='color:{dot}'>&#9679;</span> {pid[:17]}</td>"
                  f"<td>v{p.get('apk','?')}</td>"
                  f"<td style='color:{nfc_col}'>{nfc}</td>"
+                 f"<td>{p.get('ram') or '—'}</td>"
                  f"<td>{p.get('ip','?')}</td>"
                  f"<td>{estado}</td></tr>")
     if not rows:
-        rows = "<tr><td colspan='5' style='color:#64748b'>Sin paneles todavía (esperá el primer heartbeat).</td></tr>"
+        rows = "<tr><td colspan='6' style='color:#64748b'>Sin paneles todavía (esperá el primer heartbeat).</td></tr>"
     html = f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Paneles - La Nube</title><style>
@@ -548,6 +612,7 @@ def admin_panels():
 </style></head><body>
  <h1>Paneles de la flota</h1>
  <div class="sub">{online} online / {len(panels)} totales &middot; server v{VERSION}</div>
+ <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin:0 0 1rem">{tiles}</div>
  <form method="POST" action="/admin/panels/monitor" style="margin:.2rem 0 1rem">
    <span style="font-size:.85rem">Monitoreo intensivo (soporte):
      <b style="color:{'#3ddc97' if mon else '#94a3b8'}">{'ON — paneles cada 1 min' if mon else 'OFF — paneles cada 10 min'}</b>
@@ -557,7 +622,7 @@ def admin_panels():
      background:{'#7c2d12' if mon else '#0369a1'};color:#fff;font-weight:600;cursor:pointer">
      {'Apagar' if mon else 'Encender'}</button>
  </form>
- <table><tr><th>Panel</th><th>APK</th><th>NFC</th><th>IP</th><th>Estado</th></tr>{rows}</table>
+ <table><tr><th>Panel</th><th>APK</th><th>NFC</th><th>RAM panel</th><th>IP</th><th>Estado</th></tr>{rows}</table>
  <p style="margin-top:1rem"><a href="/admin">&larr; admin</a></p>
  <script>setTimeout(function(){{location.reload()}},30000)</script>
 </body></html>"""

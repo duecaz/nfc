@@ -28,7 +28,13 @@ sleep 5 && curl -s http://localhost:8200/health
 > `web/users.json.example` es solo plantilla. El `users.json` real vive en la Pi
 > (`~/docker/kiosk/users.json`, montado como volumen) y **no** se versiona.
 
-### Secretos en `.env` (obligatorio desde v21)
+### Datos en SQLite (desde v25)
+
+Las tarjetas y paneles viven en **`data/kiosk.db`** (volumen `./data`), ya no en
+users.json (queda montado solo como fuente de la migración automática inicial).
+Backup = copiar `~/docker/kiosk/data/kiosk.db`.
+
+### Secretos en `.env` (obligatorio desde v21; `PANEL_SECRET` desde v25)
 
 `docker-compose.yml` ya no trae los secretos inline; los lee de `~/docker/kiosk/.env`
 (no versionado). Crear una vez en la Pi:
