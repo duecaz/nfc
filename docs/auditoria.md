@@ -177,3 +177,37 @@ Lo que **funcionó bien** y hay que conservar:
 - UID canónico en el server (`canon_uid`) — matchea venga de donde venga.
 - Cierre de sesión con **timer nativo del APK** (no depende del navegador).
 - Deploy web reproducible desde `main/web/` + `.env`.
+
+---
+
+## 8. Revisión para 50 pantallas (2ª auditoría, flujo completo)
+
+> Veredicto: **APTO CON 2 CORRECCIONES PREVIAS** (F1 y F2). El camino NFC→login
+> es sólido; la web aguanta la concurrencia (pico estimado ~25 logins/min vs
+> 24 slots). Diagrama completo publicado como artifact de la sesión.
+
+### Hallazgos nuevos (F#) — orden de riesgo
+
+| # | Sev. | Falla | Corrección |
+|---|---|---|---|
+| **F1** | 🔴 | El APK apunta a `https://lanube.uno`: TODO el tráfico panel↔Pi sale a internet y vuelve por Cloudflare. **Corte de internet = 50 paneles sin login** aunque la LAN funcione; además duplica el consumo del ISP. | **DNS local**: resolver `lanube.uno` → `192.168.1.50` en el router/Pi-hole (split-horizon). Cloudflare queda solo para acceso externo. Sin tocar el APK. ~2 h |
+| **F2** | 🔴 | Los locks de `users.json`/`panels.json` son `threading.Lock` (por proceso). Con 3 workers gunicorn, 2 procesos pueden hacer read-modify-write a la vez → registro perdido o **JSON corrupto** (sin users.json nadie entra). Con monitoreo ON y 50 paneles (50 writes/min) la colisión es cuestión de días. | Escritura **atómica** (tmp + `os.replace`) + **file-lock** (`fcntl`). ~2 h |
+| **F3** | 🔴 | Pi = SPOF (ya conocido, #4). | Backup diario users.json+DB, SD clonada de repuesto, alerta si `/health` no responde. |
+| **F4** | 🟠 | Ráfaga del cambio de hora: 20-30 aperturas de Archivos simultáneas encolan PHP en la Pi (lentitud, no caída). | Tuning NC (§3) + F1 quita el RTT de internet. |
+| **F5** | 🟠 | `/panel-ping` es público: ids inventables gratis → panels.json crece sin tope. | Secreto compartido en el POST + tope 200 entradas. ~1 h |
+| **F6** | 🟠 | Tarjeta durante sesión abierta **se ignora** (las páginas NC no tienen `authenticate()`); no hay cambio de usuario/bloqueo hasta expirar el timer. | Mover la detección al APK (sesión activa + tarjeta → logout o preguntar). **Diseñar en producción.** |
+| **F7** | 🟡 | Id de panel = `ANDROID_ID`; en 50 paneles clonados de fábrica puede repetirse → 2 paneles = 1 fila del inventario. | Concatenar con serial (`Build.SERIAL`/getprop). |
+| **F8** | 🟡 | WebView semanas encendido: memoria sin medir a largo plazo. | Soak test 7 días en piloto + reinicio nocturno 3 am. |
+| **F9** | 🟡 | Rate-limit `memory://` aproximado entre workers. | Aceptado en prototipo; producción → Redis. |
+
+### Números a 50 paneles
+
+- Heartbeat en reposo: 50/10 min = **5 req/min** (nada). Monitoreo ON: 50/min.
+- Pico de login (cambio de hora): **~25/min**, capacidad actual 24 concurrentes ✅.
+- Lectura NFC local por panel: sin límite de escala (1.7 ms, no toca el server).
+
+### Orden de ejecución antes del despliegue
+
+1. DNS local (F1) → 2. escritura atómica (F2) → 3. backups+alerta (F3) →
+4. secreto panel-ping (F5) → 5. soak test (F8) → 6. despliegue por MDM +
+Lock Task device-owner → (producción) F6, Redis, SQLite, tokens cifrados.
