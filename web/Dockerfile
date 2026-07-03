@@ -12,5 +12,5 @@ EXPOSE 5000
 
 # I/O-bound (cada /auth espera a Nextcloud): pocos workers + muchos threads.
 # 3 workers x 8 threads = ~24 logins concurrentes (holgado para ~15 pico a 2 años).
-CMD ["gunicorn", "--workers=3", "--threads=8", "--worker-class=gthread", \
-     "--bind=0.0.0.0:5000", "--timeout=30", "app:app"]
+# 'python -m gunicorn' es robusto: no depende de que el script quede en $PATH.
+CMD ["python", "-m", "gunicorn", "--workers=3", "--threads=8", "--worker-class=gthread", "--bind=0.0.0.0:5000", "--timeout=30", "app:app"]

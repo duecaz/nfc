@@ -53,6 +53,7 @@ chmod 600 .env
 
 ```bash
 cd ~/docker/kiosk
+curl -o requirements.txt    "https://raw.githubusercontent.com/duecaz/nfc/main/web/requirements.txt"
 curl -o Dockerfile          "https://raw.githubusercontent.com/duecaz/nfc/main/web/Dockerfile"
 curl -o docker-compose.yml  "https://raw.githubusercontent.com/duecaz/nfc/main/web/docker-compose.yml"
 # (crear .env como arriba si no existe)
