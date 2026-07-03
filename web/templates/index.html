@@ -119,30 +119,10 @@
       letter-spacing: .07em;
       font-weight: 600;
     }
-    .dur-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .35rem;
-      justify-content: center;
-    }
-    .dur-chip {
-      padding: .28rem .8rem;
-      border-radius: 999px;
-      border: 1.5px solid #e2e8f0;
-      background: transparent;
-      color: #64748b;
-      font-size: .78rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all .15s;
-      font-family: inherit;
-      line-height: 1.4;
-    }
-    .dur-chip:hover { border-color: #94a3b8; color: #374151; }
-    .dur-chip.active {
-      background: #0f172a;
-      border-color: #0f172a;
-      color: #fff;
+    .dur-hint {
+      font-size: .68rem;
+      color: #94a3b8;
+      margin-top: .1rem;
     }
     .dur-stepper {
       display: flex; align-items: center; justify-content: center;
@@ -248,13 +228,7 @@
         <div class="dur-value" id="dur-value">40 min</div>
         <button type="button" class="dur-step" id="dur-plus">+</button>
       </div>
-      <div class="dur-chips" id="dur-chips">
-        <button type="button" class="dur-chip" data-min="40">40 min</button>
-        <button type="button" class="dur-chip" data-min="120">2h</button>
-        <button type="button" class="dur-chip" data-min="180">3h</button>
-        <button type="button" class="dur-chip" data-min="240">4h</button>
-        <button type="button" class="dur-chip" data-min="0">Desactivado</button>
-      </div>
+      <div class="dur-hint">bajá a 0 para <b>sesión sin límite</b></div>
     </div>
 
     <hr>
@@ -320,9 +294,6 @@
     }
     function renderDur() {
       document.getElementById('dur-value').textContent = fmtDur(sessionMinutes);
-      document.querySelectorAll('.dur-chip').forEach(function (c) {
-        c.classList.toggle('active', parseInt(c.dataset.min, 10) === sessionMinutes);
-      });
     }
     function setDur(m) {
       sessionMinutes = Math.max(0, Math.min(DUR_MAX, m));
@@ -330,10 +301,6 @@
     }
     document.getElementById('dur-minus').addEventListener('click', function () { setDur(sessionMinutes - DUR_STEP); });
     document.getElementById('dur-plus').addEventListener('click',  function () { setDur(sessionMinutes + DUR_STEP); });
-    document.getElementById('dur-chips').addEventListener('click', function (e) {
-      var chip = e.target.closest('.dur-chip');
-      if (chip) setDur(parseInt(chip.dataset.min, 10));
-    });
     renderDur();
 
     async function authenticate(uid) {

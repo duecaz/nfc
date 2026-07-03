@@ -40,7 +40,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-VERSION              = "23"
+VERSION              = "24"
 NEXTCLOUD_URL        = os.environ.get("NEXTCLOUD_URL", "http://192.168.1.50:8181")
 NEXTCLOUD_PUBLIC_URL = os.environ.get("NEXTCLOUD_PUBLIC_URL", NEXTCLOUD_URL)
 COOKIE_DOMAIN        = os.environ.get("COOKIE_DOMAIN") or None
@@ -168,6 +168,25 @@ def _save_panel(pid, info):
         data[pid] = info
         PANELS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False),
                                encoding="utf-8")
+
+
+# Monitoreo bajo demanda: OFF = baseline (paneles pinguean espaciado, carga
+# minima); ON = soporte en vivo (paneles pinguean seguido). El intervalo viaja
+# en la respuesta del ping y el panel se auto-ajusta.
+MONITOR_FILE = Path(__file__).parent / "monitor.flag"
+PING_OFF = 600   # seg cuando el monitoreo esta APAGADO (10 min)
+PING_ON  = 60    # seg cuando esta ENCENDIDO (soporte, 1 min)
+
+
+def _monitor_on():
+    try:
+        return MONITOR_FILE.read_text(encoding="utf-8").strip() == "1"
+    except Exception:
+        return False
+
+
+def _set_monitor(on):
+    MONITOR_FILE.write_text("1" if on else "0", encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -478,7 +497,15 @@ def panel_ping():
         "ip":   get_remote_address(),
         "seen": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     })
-    return jsonify(ok=True)
+    # el panel se auto-ajusta a este intervalo: rapido si el monitoreo esta ON.
+    return jsonify(ok=True, interval=PING_ON if _monitor_on() else PING_OFF)
+
+
+@app.route("/admin/panels/monitor", methods=["POST"])
+@require_admin
+def admin_panels_monitor():
+    _set_monitor(request.form.get("on") == "1")
+    return redirect(url_for("admin_panels"))
 
 
 @app.route("/admin/panels")
@@ -486,6 +513,7 @@ def panel_ping():
 def admin_panels():
     """Tabla de estado de la flota (online/offline, version, NFC)."""
     panels = _load_panels()
+    mon = _monitor_on()
     now = datetime.now(timezone.utc)
     rows = ""
     online = 0
@@ -519,7 +547,16 @@ def admin_panels():
  a{{color:#38bdf8}}
 </style></head><body>
  <h1>Paneles de la flota</h1>
- <div class="sub">{online} online / {len(panels)} totales &middot; refresca cada 30s &middot; server v{VERSION}</div>
+ <div class="sub">{online} online / {len(panels)} totales &middot; server v{VERSION}</div>
+ <form method="POST" action="/admin/panels/monitor" style="margin:.2rem 0 1rem">
+   <span style="font-size:.85rem">Monitoreo intensivo (soporte):
+     <b style="color:{'#3ddc97' if mon else '#94a3b8'}">{'ON — paneles cada 1 min' if mon else 'OFF — paneles cada 10 min'}</b>
+   </span>
+   <input type="hidden" name="on" value="{'0' if mon else '1'}">
+   <button style="margin-left:.6rem;padding:.35rem .9rem;border:none;border-radius:8px;
+     background:{'#7c2d12' if mon else '#0369a1'};color:#fff;font-weight:600;cursor:pointer">
+     {'Apagar' if mon else 'Encender'}</button>
+ </form>
  <table><tr><th>Panel</th><th>APK</th><th>NFC</th><th>IP</th><th>Estado</th></tr>{rows}</table>
  <p style="margin-top:1rem"><a href="/admin">&larr; admin</a></p>
  <script>setTimeout(function(){{location.reload()}},30000)</script>

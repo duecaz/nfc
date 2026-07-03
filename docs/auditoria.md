@@ -142,14 +142,18 @@ a todos. El MDM también fija versión y evita drift.
   `setLockTaskPackages` incluyendo las apps de archivos). Con MDM se activa
   `KioskLock=true` sin romper nada.
 
-### Monitoreo central (#10) — implementado (v23)
-- **Heartbeat propio** ✅: cada panel hace `POST /panel-ping` cada 5 min con su
-  **id** (ANDROID_ID), **versión de APK** y **estado NFC** (ok/fail). El server
-  guarda “última vez visto” + IP en `panels.json` (efímero).
-- **Vista**: `/admin/panels` (dentro del admin) muestra la tabla de la flota:
-  online/offline, versión y NFC de cada panel. Se refresca sola cada 30 s.
-- Complementario al **dashboard del MDM** (online/offline + versión), que también
-  sirve como monitoreo.
+### Monitoreo central (#10) — implementado (v24, bajo demanda)
+- **Heartbeat propio** ✅: cada panel hace `POST /panel-ping` con su **id**
+  (ANDROID_ID), **versión de APK** y **estado NFC** (ok/fail). El server guarda
+  “última vez visto” + IP en `panels.json` (efímero).
+- **Bajo demanda (carga mínima):** por defecto los paneles pinguean **cada 10 min**
+  (≈3 req/min con 30 paneles). Desde `/admin/panels` se activa **"Monitoreo
+  intensivo"** → el server responde a cada ping con un intervalo corto y los
+  paneles pasan a **cada 1 min** (para soporte en vivo). Se apaga y vuelven a 10 min.
+  El panel se auto-ajusta con la respuesta del ping (sin polling extra).
+- **Vista**: `/admin/panels` (link en el admin): tabla de la flota (online/offline,
+  versión, NFC) + el toggle ON/OFF. Se refresca sola cada 30 s.
+- Complementario al **dashboard del MDM** (online/offline + versión).
 
 ---
 

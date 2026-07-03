@@ -27,7 +27,7 @@ public class MainActivity : Activity
 
     private const string KioskUrl       = "https://lanube.uno";
     private const string LogTag         = "LaNubeKiosk";
-    private const string ApkVersion     = "9";
+    private const string ApkVersion     = "10";
     private const int    FileChooserCode = 1001;
     // Lock Task (kiosko bloqueado): activar SOLO con MDM device-owner + whitelist
     // de las apps de archivos; si no, rompe subir/abrir archivos. Ver docs/auditoria.md.
@@ -76,9 +76,10 @@ public class MainActivity : Activity
             RegisterReceiver(_downloadReceiver, dlFilter);
 #pragma warning restore CA1416
 
-        // Heartbeat de monitoreo: primer envio a los 15s, luego cada 5 min.
+        // Heartbeat: primer envio a los 15s; luego el server dicta el intervalo
+        // (10 min en reposo, 1 min con monitoreo ON). Ver SendHeartbeat.
         _heartbeat = new System.Threading.Timer(SendHeartbeat, null,
-            TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(5));
+            TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(10));
 
         HideSystemUI();
     }
@@ -115,6 +116,8 @@ public class MainActivity : Activity
     }
 
     // ---- Heartbeat de monitoreo: POST /panel-ping (id, apk, nfc) ----
+    // El server responde el intervalo (rapido si el monitoreo esta ON, espaciado
+    // si esta OFF) y el panel se auto-ajusta -> casi sin carga en reposo.
     private async void SendHeartbeat(object? state)
     {
         try
@@ -126,7 +129,19 @@ public class MainActivity : Activity
                 ["nfc"] = NfcKit.IsReady ? "ok" : "fail",
             };
             using var content = new System.Net.Http.FormUrlEncodedContent(data);
-            await _http.PostAsync(KioskUrl + "/panel-ping", content);
+            var resp = await _http.PostAsync(KioskUrl + "/panel-ping", content);
+            var body = await resp.Content.ReadAsStringAsync();
+
+            int secs = 600;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("interval", out var iv))
+                    secs = iv.GetInt32();
+            }
+            catch { }
+            secs = Math.Max(30, Math.Min(3600, secs));
+            _heartbeat?.Change(TimeSpan.FromSeconds(secs), TimeSpan.FromSeconds(secs));
         }
         catch { /* offline: reintenta en el proximo ciclo */ }
     }
