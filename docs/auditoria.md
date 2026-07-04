@@ -238,3 +238,32 @@ echo "PANEL_SECRET=lanube-panel-2026" >> .env    # mismo valor que PanelSecret d
 # luego el deploy normal (curl app.py+templates + rebuild). Al arrancar veras en logs:
 # [DB] migradas N tarjetas desde users.json
 ```
+
+---
+
+## 10. Arquitectura real y respaldo (aclaración del cliente)
+
+**Topología confirmada:** un solo servidor = **la Raspberry Pi 5** (Docker: Nextcloud
++ Flask + nginx + cloudflared, archivos en SSD). La "nube" es **solo Cloudflare para
+el dominio/túnel** — no se hostea ni se guarda nada afuera. Sirve a los paneles de
+**varios colegios** y a los **docentes desde sus casas**, todo vía `lanube.uno`.
+
+- **F1 se descarta**: con multi-colegio + acceso desde casas, el tráfico por internet
+  es inherente y correcto. No hay atajo DNS posible (no comparten LAN).
+- **El SPOF real es la Pi**: su SSD, corriente e internet son el punto único de falla
+  de toda la operación. Mitigación = respaldo + Pi de repuesto (no mover a la nube).
+
+**Base de datos (1 sola Pi):** SQLite es la elección correcta (ya implementada, sin
+servidor extra, no compite por RAM con Nextcloud). MariaDB solo tendría sentido si
+NC ya la usa y se quiere una sola base. **PocketBase** (SQLite + admin + API +
+respaldos automáticos, un binario) es el candidato para la producción si se quiere
+menos código propio. Se descartan JSON (F2) y un DB server dedicado en la Pi.
+
+**Respaldo (F3) — implementado:** `tools/backup-pi.sh` (correr en la Pi):
+1. `kiosk.db` con `sqlite3 .backup` (consistente con WAL).
+2. Nextcloud en **modo mantenimiento** → dump de su base (`mysqldump`) + `tar` de los
+   archivos de la SSD + config. Sale de mantenimiento.
+3. Conserva las últimas 7 copias; opcional `rsync` a una PC/NAS (regla 3-2-1).
+Programar con cron a las 3am. **Ideal: `BACKUP_DIR` en OTRO disco**, no en la SSD
+principal (si muere la SSD, el backup no debe morir con ella). Copia offsite
+recomendada: PC/NAS encendido o un bucket B2/Wasabi.
