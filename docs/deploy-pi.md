@@ -106,8 +106,8 @@ sudo apt update && sudo apt install -y sqlite3
 curl -fsSL -o ~/backup-pi.sh https://raw.githubusercontent.com/duecaz/nfc/main/tools/backup-pi.sh
 chmod +x ~/backup-pi.sh
 ~/backup-pi.sh                     # probar a mano (crea ~/backups/FECHA/)
-crontab -e                         # agregar (3 am):
-# 0 3 * * * /home/duecaz/backup-pi.sh >> /home/duecaz/backup.log 2>&1
+sudo crontab -e                    # agregar (3 am, corre como root):
+# 0 3 * * * /home/duecaz/backup-pi.sh >> /var/log/lanube-backup.log 2>&1
 ```
 Config ya viene ajustada (NC=SQLite en `/mnt/datos/nextcloud`). Ideal: apuntar
 `BACKUP_DIR` a un disco USB aparte y/o `RSYNC_TARGET` a una PC/NAS (regla 3-2-1).

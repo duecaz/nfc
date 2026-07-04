@@ -38,7 +38,7 @@
 **Datos persistentes (SSD en `/mnt/datos`):**
 - Kiosko: `~/docker/kiosk/data/kiosk.db` (SQLite: tarjetas/paneles/config) + `~/docker/kiosk/.env`
 - Nextcloud (confirmado con `docker inspect`):
-  - `/mnt/datos/nextcloud/data` → **archivos de los docentes + la base SQLite de NC** (`nextcloud.db`)
+  - `/mnt/datos/nextcloud/data` → **archivos de los docentes + la base SQLite de NC** (`nextcloud.db`). Propiedad de **www-data** → leer/respaldar requiere **root** (sudo).
   - `/mnt/datos/nextcloud/html` → app de Nextcloud (incluye `html/config/config.php`)
 - `users.json`: **legado**, solo fue la fuente de la migración a SQLite (v25)
 
