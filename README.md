@@ -20,12 +20,14 @@ en una Raspberry Pi.
 
 ## Documentación
 
-- **[docs/arquitectura.md](docs/arquitectura.md)** — infraestructura Pi, Nextcloud, Cloudflare, servicios.
+- **[docs/vision.md](docs/vision.md)** — 🎯 qué es el proyecto, decisiones tomadas (D1–D18), bitácora de versiones y plan de producción. **Empezar por aquí.**
+- **[docs/infraestructura-pi.md](docs/infraestructura-pi.md)** — 🔐 la Pi al detalle: red, puertos, credenciales, contenedores, comandos (repo privado).
+- **[docs/auditoria.md](docs/auditoria.md)** — auditorías de estabilidad (F1–F9) + guía para la versión de producción.
 - **[docs/deploy-pi.md](docs/deploy-pi.md)** — cómo desplegar la web y compilar/instalar el APK.
-- **[docs/nfc-droidlogic.md](docs/nfc-droidlogic.md)** — cómo se lee el NFC del panel (DexClassLoader) y cómo mejorar.
-- **[docs/auditoria.md](docs/auditoria.md)** — auditoría de estabilidad para flota + guía para la versión de producción.
+- **[docs/nfc-droidlogic.md](docs/nfc-droidlogic.md)** — cómo se lee el NFC del panel (DexClassLoader).
+- **[docs/arquitectura.md](docs/arquitectura.md)** — histórico (ver infraestructura-pi.md para el estado actual).
 - **[docs/referencia-fabricante/](docs/referencia-fabricante/)** — material del programador: `NFCKit-Usage.md`, `NfcKit.kt`, `classes.jar` (stub de firmas, **no** se usa en runtime).
-- **[CLAUDE.md](CLAUDE.md)** — contexto para asistentes de IA.
+- **[CLAUDE.md](CLAUDE.md)** — contexto para asistentes de IA (estado actual + reglas).
 
 ## Resumen técnico
 

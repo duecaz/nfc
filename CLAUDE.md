@@ -3,6 +3,13 @@
 Plataforma **Nextcloud** para docentes con login por **tarjeta NFC** en pantallas
 interactivas. Sirve a **varios colegios** y a los **docentes desde sus casas**.
 
+## 📖 Chat nuevo: leer PRIMERO, en este orden
+
+1. **[docs/vision.md](docs/vision.md)** — qué es el proyecto, decisiones D1–D18, bitácora.
+2. **[docs/infraestructura-pi.md](docs/infraestructura-pi.md)** — la Pi: red, puertos, credenciales, qué hay instalado.
+3. **[docs/auditoria.md](docs/auditoria.md)** — hallazgos F1–F9 y guía para rehacer producción desde 0.
+4. Este archivo (estado + reglas) y [docs/deploy-pi.md](docs/deploy-pi.md) / [docs/nfc-droidlogic.md](docs/nfc-droidlogic.md) según la tarea.
+
 **Hosting:** todo self-hosted en **una Raspberry Pi 5** (Docker: Nextcloud + Flask
 kiosko + nginx + cloudflared; archivos en **SSD**). La "nube" es **solo Cloudflare**
 para el **dominio + túnel + TLS** — no se hostea ni se guarda nada afuera.

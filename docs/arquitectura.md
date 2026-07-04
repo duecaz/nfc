@@ -1,5 +1,11 @@
 # Arquitectura — La Nube
 
+> ⚠️ **Documento HISTÓRICO** (fusión de LaNube-Pi.md + PROYECTO.md de las primeras
+> etapas). Puede contener datos desactualizados (p. ej. users.json, flujo USB).
+> **El estado actual vive en** [`infraestructura-pi.md`](infraestructura-pi.md) y
+> [`vision.md`](vision.md). Se conserva como referencia de cómo se montó la Pi.
+
+
 > Consolidado de LaNube-Pi.md + PROYECTO.md.
 
 # La Nube — Infraestructura Raspberry Pi 5 (resumen para retomar)
