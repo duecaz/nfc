@@ -98,3 +98,16 @@ probar el auto-logout en 1 minuto.
 2. Alta masiva de tarjetas por CSV en `/admin`.
 3. Sacar `ADMIN_PASSWORD` de `web/docker-compose.yml` a un `.env` en la Pi.
 4. Cambiar contraseñas de testeo.
+
+## Respaldo automático (F3) — en la Pi
+
+```bash
+sudo apt update && sudo apt install -y sqlite3
+curl -fsSL -o ~/backup-pi.sh https://raw.githubusercontent.com/duecaz/nfc/main/tools/backup-pi.sh
+chmod +x ~/backup-pi.sh
+~/backup-pi.sh                     # probar a mano (crea ~/backups/FECHA/)
+crontab -e                         # agregar (3 am):
+# 0 3 * * * /home/duecaz/backup-pi.sh >> /home/duecaz/backup.log 2>&1
+```
+Config ya viene ajustada (NC=SQLite en `/mnt/datos/nextcloud`). Ideal: apuntar
+`BACKUP_DIR` a un disco USB aparte y/o `RSYNC_TARGET` a una PC/NAS (regla 3-2-1).

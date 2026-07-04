@@ -1,95 +1,87 @@
 #!/usr/bin/env bash
 # ============================================================
 #  backup-pi.sh — respaldo nocturno de La Nube (correr EN la Pi)
-#  Respalda: base del kiosko (SQLite) + base de Nextcloud + archivos NC + config.
-#  Guarda las ultimas N copias locales y (opcional) las deja en una PC/NAS.
+#  Config ya ajustada a la Pi actual: Debian 13, NC con SQLite en /mnt/datos.
+#  Respalda: kiosk.db (SQLite) + archivos y base de Nextcloud + config + .env.
 #
-#  Instalar en la Pi:
+#  Instalar:
+#    sudo apt update && sudo apt install -y sqlite3
 #    curl -fsSL -o ~/backup-pi.sh https://raw.githubusercontent.com/duecaz/nfc/main/tools/backup-pi.sh
 #    chmod +x ~/backup-pi.sh
-#    # probar a mano:
-#    ~/backup-pi.sh
-#    # programar 3am:  crontab -e   ->   0 3 * * * /home/duecaz/backup-pi.sh >> /home/duecaz/backup.log 2>&1
+#    ~/backup-pi.sh                 # probar a mano
+#    crontab -e   ->   0 3 * * * /home/duecaz/backup-pi.sh >> /home/duecaz/backup.log 2>&1
 # ============================================================
 set -euo pipefail
 
-# ============ CONFIG — ajustá estos valores ============
-KIOSK_DIR="$HOME/docker/kiosk"                 # donde vive data/kiosk.db y .env
-NC_DIR="$HOME/docker/nextcloud"                # compose de Nextcloud
-NC_CONTAINER="nextcloud_server"                # nombre del contenedor NC
-NC_DATA="$HOME/docker/nextcloud/data"          # <-- RUTA REAL de los archivos en la SSD (verificá!)
+# ============ CONFIG (ya ajustada; revisá BACKUP_DIR) ============
+KIOSK_DIR="$HOME/docker/kiosk"                        # kiosk.db + .env
+NC_CONTAINER="nextcloud_server"                       # contenedor NC (para modo mantenimiento)
+NC_FILES="/mnt/datos/nextcloud/data"                  # archivos docentes + base SQLite de NC
+NC_CONFIG="/mnt/datos/nextcloud/html/config"          # config.php de Nextcloud
+DB_CONTAINER=""                                        # vacío: NC usa SQLite (va dentro de NC_FILES)
 
-# Base de datos de Nextcloud (dejá DB_CONTAINER vacío si NC usa SQLite):
-DB_CONTAINER="nextcloud_db"                     # contenedor MariaDB/MySQL de NC (o "")
-DB_NAME="nextcloud"
-DB_USER="nextcloud"
-DB_PASS="CAMBIAR_PASSWORD_DB_NC"               # el de config.php (dbpassword)
+BACKUP_DIR="$HOME/backups"                             # destino. IDEAL: un disco USB aparte (ej. /mnt/usb/backups)
+KEEP=7                                                 # copias diarias a conservar
 
-BACKUP_DIR="/mnt/backup"                        # destino local (idealmente OTRO disco, no la SSD principal)
-KEEP=7                                          # cuantas copias diarias conservar
-
-# Copia OFFSITE opcional (a una PC/NAS por SSH). Dejá RSYNC_TARGET vacío para desactivar.
-RSYNC_TARGET=""                                 # ej: "usuario@192.168.1.100:/backups/lanube"
-# ======================================================
+# Copia OFFSITE opcional (a una PC/NAS por SSH). Vacío = desactivada.
+RSYNC_TARGET=""                                        # ej: "usuario@192.168.1.92:/backups/lanube"
+# ================================================================
 
 STAMP=$(date +%Y-%m-%d_%H%M)
 DEST="$BACKUP_DIR/$STAMP"
 mkdir -p "$DEST"
 echo "=== Backup La Nube $STAMP -> $DEST ==="
-
 fail() { echo "!!! ERROR: $1" >&2; exit 1; }
-size() { du -h "$1" 2>/dev/null | cut -f1; }
+sz()   { du -h "$1" 2>/dev/null | cut -f1; }
 
-# 1) Kiosko (SQLite: .backup respeta WAL y da copia consistente) --------------
+# 1) Kiosko (SQLite .backup = copia consistente con WAL) ----------------------
 if [ -f "$KIOSK_DIR/data/kiosk.db" ]; then
   sqlite3 "$KIOSK_DIR/data/kiosk.db" ".backup '$DEST/kiosk.db'" \
     || cp "$KIOSK_DIR/data/kiosk.db" "$DEST/kiosk.db"
   cp "$KIOSK_DIR/.env" "$DEST/kiosk.env" 2>/dev/null || true
-  [ -s "$DEST/kiosk.db" ] || fail "kiosk.db salio vacio"
-  echo "  [ok] kiosk.db  ($(size "$DEST/kiosk.db"))"
+  [ -s "$DEST/kiosk.db" ] || fail "kiosk.db salió vacío"
+  echo "  [ok] kiosk.db  ($(sz "$DEST/kiosk.db"))"
 else
-  echo "  [!] no encontre kiosk.db en $KIOSK_DIR/data (revisá KIOSK_DIR)"
+  echo "  [!] no encontré $KIOSK_DIR/data/kiosk.db (revisá KIOSK_DIR)"
 fi
 
-# 2) Nextcloud en modo mantenimiento (copia consistente) ----------------------
+# 2) Nextcloud en modo mantenimiento (copia consistente de su SQLite + archivos)
 occ() { docker exec -u www-data "$NC_CONTAINER" php occ "$@"; }
 MAINT=0
 if docker ps --format '{{.Names}}' | grep -qx "$NC_CONTAINER"; then
-  occ maintenance:mode --on && MAINT=1 && echo "  [ok] Nextcloud en mantenimiento"
+  occ maintenance:mode --on >/dev/null && MAINT=1 && echo "  [ok] Nextcloud en mantenimiento"
 fi
 
-# 3) Base de datos de Nextcloud ----------------------------------------------
+# (si algún día NC pasa a MariaDB, poné DB_CONTAINER y se hace mysqldump acá)
 if [ -n "$DB_CONTAINER" ] && docker ps --format '{{.Names}}' | grep -qx "$DB_CONTAINER"; then
-  docker exec "$DB_CONTAINER" sh -c "exec mysqldump --single-transaction -u'$DB_USER' -p'$DB_PASS' '$DB_NAME'" \
-    | gzip > "$DEST/nextcloud-db.sql.gz" || fail "mysqldump fallo (revisá DB_PASS/DB_USER)"
-  [ -s "$DEST/nextcloud-db.sql.gz" ] || fail "el dump de la DB salio vacio"
-  echo "  [ok] nextcloud-db.sql.gz  ($(size "$DEST/nextcloud-db.sql.gz"))"
-else
-  echo "  [i] sin DB_CONTAINER: asumo que NC usa SQLite (se respalda con los archivos)"
+  docker exec "$DB_CONTAINER" sh -c "exec mysqldump --single-transaction -u root nextcloud" \
+    | gzip > "$DEST/nextcloud-db.sql.gz" && echo "  [ok] nextcloud-db.sql.gz  ($(sz "$DEST/nextcloud-db.sql.gz"))"
 fi
 
-# 4) Archivos + config de Nextcloud (lo grande) ------------------------------
-if [ -d "$NC_DATA" ]; then
-  tar czf "$DEST/nextcloud-data.tgz" -C "$(dirname "$NC_DATA")" "$(basename "$NC_DATA")" \
-    || fail "tar de los archivos NC fallo"
-  echo "  [ok] nextcloud-data.tgz  ($(size "$DEST/nextcloud-data.tgz"))"
+# 3) Archivos + base SQLite de NC (lo grande) --------------------------------
+if [ -d "$NC_FILES" ]; then
+  tar czf "$DEST/nextcloud-data.tgz" -C "$(dirname "$NC_FILES")" "$(basename "$NC_FILES")" \
+    || fail "tar de $NC_FILES falló"
+  echo "  [ok] nextcloud-data.tgz  ($(sz "$DEST/nextcloud-data.tgz"))"
 else
-  echo "  [!] no encontre $NC_DATA — ¡ajustá NC_DATA a la ruta real de la SSD!"
+  echo "  [!] no encontré $NC_FILES"
 fi
-[ -d "$NC_DIR" ] && tar czf "$DEST/nextcloud-config.tgz" -C "$(dirname "$NC_DIR")" "$(basename "$NC_DIR")" \
-  --exclude='*/data' 2>/dev/null && echo "  [ok] nextcloud-config.tgz  ($(size "$DEST/nextcloud-config.tgz"))"
+
+# 4) config.php de Nextcloud --------------------------------------------------
+[ -d "$NC_CONFIG" ] && tar czf "$DEST/nextcloud-config.tgz" -C "$(dirname "$NC_CONFIG")" "$(basename "$NC_CONFIG")" \
+  && echo "  [ok] nextcloud-config.tgz  ($(sz "$DEST/nextcloud-config.tgz"))"
 
 # 5) salir de mantenimiento ---------------------------------------------------
-[ "$MAINT" = 1 ] && occ maintenance:mode --off && echo "  [ok] Nextcloud operativo de nuevo"
+[ "$MAINT" = 1 ] && occ maintenance:mode --off >/dev/null && echo "  [ok] Nextcloud operativo de nuevo"
 
-# 6) retencion: borrar copias mas viejas que KEEP ----------------------------
+# 6) retención ----------------------------------------------------------------
 ls -1dt "$BACKUP_DIR"/*/ 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -rf
-echo "  [ok] retencion: conservando ultimas $KEEP copias"
+echo "  [ok] retención: conservando últimas $KEEP copias"
 
-# 7) copia offsite opcional (a PC/NAS) ---------------------------------------
+# 7) copia offsite opcional ---------------------------------------------------
 if [ -n "$RSYNC_TARGET" ]; then
-  rsync -a --delete "$BACKUP_DIR/" "$RSYNC_TARGET/" && echo "  [ok] copia offsite -> $RSYNC_TARGET" \
-    || echo "  [!] rsync offsite fallo (¿PC apagada? ¿llave SSH?)"
+  rsync -a --delete "$BACKUP_DIR/" "$RSYNC_TARGET/" \
+    && echo "  [ok] offsite -> $RSYNC_TARGET" || echo "  [!] rsync offsite falló"
 fi
 
-echo "=== Backup terminado: $DEST ($(size "$DEST")) ==="
+echo "=== Backup terminado: $DEST ($(sz "$DEST")) ==="

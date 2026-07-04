@@ -10,7 +10,7 @@
 
 | Equipo | Dirección | Acceso | Notas |
 |---|---|---|---|
-| **Raspberry Pi 5** (8 GB, SSD M.2) | `192.168.1.50` · hostname `pio` | `ssh duecaz@192.168.1.50` (clave: la del usuario duecaz) | Corre TODO (Docker) |
+| **Raspberry Pi 5** (8 GB, SSD M.2) | `192.168.1.50` · hostname `pio` | `ssh duecaz@192.168.1.50` (clave: la del usuario duecaz — no registrada aquí) | **Debian 13 (trixie)**, kernel 6.18 aarch64. Corre TODO (Docker). SSD montada en `/mnt/datos` |
 | **Panel interactivo de pruebas** | `192.168.1.57:5555` | `adb connect 192.168.1.57:5555` (sin clave) | Android; NFC I2C droidlogic |
 | **PC de desarrollo (Windows)** | — | repo en `D:\claude\android\nfc`; scripts en `D:\claude\scripts` | compila el APK, corre el menú |
 
@@ -35,9 +35,11 @@
 | `nfc_kiosk` (Flask) | **8200** | Web del kiosko (gunicorn 3×8) | `~/docker/kiosk/` |
 | `cloudflared` | — | Túnel | `~/docker/cloudflared/` |
 
-**Datos persistentes:**
+**Datos persistentes (SSD en `/mnt/datos`):**
 - Kiosko: `~/docker/kiosk/data/kiosk.db` (SQLite: tarjetas/paneles/config) + `~/docker/kiosk/.env`
-- Nextcloud: archivos de los docentes en la **SSD** — ruta exacta: (COMPLETAR: `docker inspect nextcloud_server | grep -i source`)
+- Nextcloud (confirmado con `docker inspect`):
+  - `/mnt/datos/nextcloud/data` → **archivos de los docentes + la base SQLite de NC** (`nextcloud.db`)
+  - `/mnt/datos/nextcloud/html` → app de Nextcloud (incluye `html/config/config.php`)
 - `users.json`: **legado**, solo fue la fuente de la migración a SQLite (v25)
 
 ## 4. Credenciales (testeo — ROTAR antes de producción)
@@ -46,8 +48,9 @@
 |---|---|---|---|
 | Kiosko `/admin` | — (solo clave) | `Colegio2026!` | `ADMIN_PASSWORD` en `~/docker/kiosk/.env` |
 | Heartbeat de paneles | — | `lanube-panel-2026` | `PANEL_SECRET` en `.env` **y** `PanelSecret` en `apk/MainActivity.cs` (deben coincidir) |
-| SSH Pi | `duecaz` | (COMPLETAR) | — |
-| Nextcloud admin | (COMPLETAR) | (COMPLETAR) | se usa en `/admin` del kiosko para crear docentes |
+| SSH Pi | `duecaz` | (COMPLETAR — no compartida) | — |
+| Nextcloud admin | `nextcloud` | `Colegio2026!` | se usa en `/admin` del kiosko para crear docentes |
+| Docente de prueba | `jperez` | `Colegio2026!` | tarjeta NFC de testeo |
 | NPM admin (puerto 81) | (COMPLETAR) | (COMPLETAR) | panel del proxy |
 | Cloudflare | (COMPLETAR) | (COMPLETAR) | dashboard del túnel/dominio |
 | GitHub | `duecaz` | — | repo privado `duecaz/nfc`, rama única `main` |
@@ -59,7 +62,7 @@ plano** (pendiente de producción: cifrar en reposo). Revocables desde NC → Aj
 
 | Dónde | Software |
 |---|---|
-| **Pi** | Raspberry Pi OS (64-bit) · Docker + docker compose · los 4 contenedores de arriba. ⚠️ Para `tools/backup-pi.sh` hace falta `sqlite3` en el host: `sudo apt install sqlite3` |
+| **Pi** | **Debian 13 (trixie)**, kernel 6.18 aarch64 · Docker + docker compose · los 4 contenedores de arriba. ⚠️ Para `tools/backup-pi.sh` hace falta `sqlite3` en el host: `sudo apt install -y sqlite3` |
 | **Panel** | Android (Rockchip; NFC vía `/system/framework/droidlogic-tv.jar`) · APK `uno.lanube.kiosk` v11 |
 | **PC dev** | .NET 10 SDK (workload android) · adb · git · menú PS1 (`D:\claude\scripts\menu.ps1`) |
 
@@ -108,7 +111,9 @@ Deploy completo: ver [`deploy-pi.md`](deploy-pi.md). Menú PS1 de la PC: opcione
 
 ## 9. Pendientes de completar en este documento
 
-- [ ] Ruta exacta de los archivos NC en la SSD (`docker inspect nextcloud_server | grep -i source`)
-- [ ] Credenciales NC admin, NPM admin, cuenta Cloudflare, clave SSH
-- [ ] Versión exacta de Raspberry Pi OS (`cat /etc/os-release`)
-- [ ] Instalar `sqlite3` en la Pi y configurar `tools/backup-pi.sh` + cron (F3)
+- [x] ~~Ruta NC en la SSD~~ → `/mnt/datos/nextcloud/{data,html}`
+- [x] ~~NC admin~~ → `nextcloud` / `Colegio2026!`
+- [x] ~~Versión del OS~~ → Debian 13 (trixie), kernel 6.18
+- [ ] Credenciales: NPM admin (puerto 81), cuenta Cloudflare, clave SSH
+- [ ] Instalar `sqlite3` en la Pi y activar `tools/backup-pi.sh` + cron (F3) — ver deploy-pi.md
+- [ ] Confirmar de qué disco arranca la Pi (¿SSD o microSD?) para elegir dónde guardar el backup
