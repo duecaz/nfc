@@ -25,8 +25,8 @@ sleep 5 && curl -s http://localhost:8200/health
 - **Infra** (Dockerfile / docker-compose / gunicorn): cambian poco; cuando cambian hay
   que curlear tambien esos archivos (ver abajo).
 
-> `web/users.json.example` es solo plantilla. El `users.json` real vive en la Pi
-> (`~/docker/kiosk/users.json`, montado como volumen) y **no** se versiona.
+> Los datos viven en **SQLite** `~/docker/kiosk/data/kiosk.db` (volumen `./data`).
+> `users.json` es legado (solo fue la fuente de la migración a SQLite en v25).
 
 ### Datos en SQLite (desde v25)
 

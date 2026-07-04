@@ -10,7 +10,7 @@
 
 | Equipo | Dirección | Acceso | Notas |
 |---|---|---|---|
-| **Raspberry Pi 5** (8 GB, SSD M.2) | `192.168.1.50` · hostname `pio` | `ssh duecaz@192.168.1.50` (clave: la del usuario duecaz — no registrada aquí) | **Debian 13 (trixie)**, kernel 6.18 aarch64. Corre TODO (Docker). SSD montada en `/mnt/datos` |
+| **Raspberry Pi 5** (8 GB) — *testeo* | `192.168.1.50` · hostname `pio` | `ssh duecaz@192.168.1.50` (clave del usuario duecaz — no registrada aquí) | **Debian 13 (trixie)**, kernel 6.18 aarch64. Corre TODO en Docker. **Arranca y guarda todo en UNA microSD de 29.7 GB** (sin SSD; ver §3). La Pi de producción usará M.2 |
 | **Panel interactivo de pruebas** | `192.168.1.57:5555` | `adb connect 192.168.1.57:5555` (sin clave) | Android; NFC I2C droidlogic |
 | **PC de desarrollo (Windows)** | — | repo en `D:\claude\android\nfc`; scripts en `D:\claude\scripts` | compila el APK, corre el menú |
 
@@ -35,16 +35,17 @@
 | `nfc_kiosk` (Flask) | **8200** | Web del kiosko (gunicorn 3×8) | `~/docker/kiosk/` |
 | `cloudflared` | — | Túnel | `~/docker/cloudflared/` |
 
-**Discos (Pi actual):**
-- **microSD** = arranque (`/`) + `/home/duecaz` (configs docker, `kiosk.db`, `~/backups`).
-- **SSD M.2** = `/mnt/datos` (archivos de Nextcloud + su base SQLite — lo pesado).
-- El backup vive en la microSD → **cross-disk** respecto a los archivos de NC (SSD).
-  Protege contra falla de la SSD ✅. Punto débil: la microSD (OS+backups) es propensa
-  a fallar → conviene una copia offsite (USB/PC) — regla 3-2-1.
-- **Pi NUEVA (producción)**: arrancará desde **M.2 (NVMe)**. Si OS+datos comparten el
-  M.2, el backup **debe** ir a otro medio (USB dedicado o PC/NAS/cloud), no al mismo M.2.
+**Discos (Pi de TESTEO actual) — verificado con `lsblk`:**
+- **UNA sola microSD de 29.7 GB** (`/dev/mmcblk0`) tiene TODO: OS + `/home/duecaz`
+  (docker, `kiosk.db`, `~/backups`) + `/mnt/datos` (es una **carpeta** dentro de la
+  microSD, **no un disco aparte** — `lsblk` no muestra ningún SSD/NVMe).
+- ⚠️ **El backup NO es cross-disk**: vive en la misma microSD que los datos. Si la
+  microSD falla, se pierde todo (incluidos los backups). Aceptable para **testeo**;
+  para no perder nada → copia offsite a PC/USB.
+- **Pi NUEVA (producción)**: arrancará de **M.2 (NVMe)**. Plan: datos en el M.2 y el
+  **backup a OTRO medio** (USB dedicado / PC / cloud), nunca en el mismo disco.
 
-**Datos persistentes (SSD en `/mnt/datos`):**
+**Datos persistentes (todos en la microSD; `/mnt/datos` es carpeta, no disco):**
 - Kiosko: `~/docker/kiosk/data/kiosk.db` (SQLite: tarjetas/paneles/config) + `~/docker/kiosk/.env`
 - Nextcloud (confirmado con `docker inspect`):
   - `/mnt/datos/nextcloud/data` → **archivos de los docentes + la base SQLite de NC** (`nextcloud.db`). Propiedad de **www-data** → leer/respaldar requiere **root** (sudo).
@@ -124,7 +125,7 @@ Deploy completo: ver [`deploy-pi.md`](deploy-pi.md). Menú PS1 de la PC: opcione
 - [x] ~~NC admin~~ → `nextcloud` / `Colegio2026!`
 - [x] ~~Versión del OS~~ → Debian 13 (trixie), kernel 6.18
 - [ ] Credenciales: NPM admin (puerto 81), cuenta Cloudflare, clave SSH
-- [ ] Instalar `sqlite3` en la Pi y activar `tools/backup-pi.sh` + cron (F3) — ver deploy-pi.md
-- [x] ~~Disco de arranque~~ → **microSD** (datos NC en SSD /mnt/datos); backup en microSD = cross-disk ✅
-- [ ] (Opcional) Copia offsite del backup a PC/USB (la microSD es propensa a fallar)
-- [ ] Pi nueva: arranca de M.2 → planificar backup a otro medio
+- [x] ~~Backup (F3)~~ → `tools/backup-pi.sh` probado (81 MB) + **cron 3am instalado** (`sudo crontab`)
+- [x] ~~Disco~~ → **UNA microSD de 29.7 GB** (NO hay SSD en la Pi de testeo; `/mnt/datos` es carpeta). Backup NO cross-disk.
+- [ ] Copia offsite del backup a PC/USB (todo está en la misma microSD → riesgo real)
+- [ ] Pi nueva (M.2): planificar datos + backup en medios separados
