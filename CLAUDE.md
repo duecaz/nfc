@@ -5,8 +5,9 @@ de la marca (en cualquier colegio) y entran a **sus archivos** en Nextcloud. El 
 de acceso vive asociado a la tarjeta. Desde casa entran por navegador. Todo es
 **self-hosted en una Raspberry Pi**; Cloudflare es **solo** el dominio + túnel + TLS.
 
-> ⚠️ **Prototipo de testeo.** La producción se rehará **desde cero** con estas lecciones.
-> **Regla:** mantener los MD al día con **cada** cambio — son la fuente de verdad.
+> ⚠️ **Prototipo de testeo.** La producción se rehará **desde cero** siguiendo el plano
+> **[`docs/produccion-desde-cero.md`](docs/produccion-desde-cero.md)** — el MD más
+> importante del repo. **Regla:** mantener los MD al día con **cada** cambio.
 
 ---
 
@@ -31,11 +32,12 @@ El APK impone un timer nativo de sesión.
 
 | Necesito… | Abrir |
 |---|---|
-| Qué decidimos y por qué (D1–D18), bitácora, plan de producción | **`docs/vision.md`** |
-| Datos de la Pi: IPs, puertos, **credenciales**, rutas, discos, comandos | **`docs/infraestructura-pi.md`** |
-| Hallazgos/auditoría F1–F9 + guía de producción | **`docs/auditoria.md`** |
-| Cómo desplegar web o APK | **`docs/deploy-pi.md`** |
-| Cómo se lee el NFC del panel (DexClassLoader) | **`docs/nfc-droidlogic.md`** |
+| 🏗️ **Construir el proyecto v2 desde 0** (el plano, lo más importante) | **`docs/produccion-desde-cero.md`** |
+| Qué decidimos y por qué (D1–D18), bitácora | `docs/vision.md` |
+| Datos de la Pi: IPs, puertos, **credenciales**, rutas, discos, comandos | `docs/infraestructura-pi.md` |
+| Hallazgos/auditoría F1–F9 (detalle técnico) | `docs/auditoria.md` |
+| Cómo desplegar web o APK | `docs/deploy-pi.md` |
+| Cómo se lee el NFC del panel (DexClassLoader) | `docs/nfc-droidlogic.md` |
 
 Estructura del repo: `web/` (Flask) · `apk/` (Android .NET) · `test/` (diagnóstico) ·
 `docs/` · `tools/` (scripts PS1 del menú + `backup-pi.sh`).

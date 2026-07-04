@@ -20,7 +20,8 @@ en una Raspberry Pi.
 
 ## Documentación
 
-- **[docs/vision.md](docs/vision.md)** — 🎯 qué es el proyecto, decisiones tomadas (D1–D18), bitácora de versiones y plan de producción. **Empezar por aquí.**
+- **[docs/produccion-desde-cero.md](docs/produccion-desde-cero.md)** — 🏗️ **el plano para construir el v2 desde 0** (el MD más importante). Qué conservar, qué mejorar, errores a no repetir.
+- **[docs/vision.md](docs/vision.md)** — 🎯 qué es el proyecto, decisiones tomadas (D1–D18), bitácora de versiones.
 - **[docs/infraestructura-pi.md](docs/infraestructura-pi.md)** — 🔐 la Pi al detalle: red, puertos, credenciales, contenedores, comandos (repo privado).
 - **[docs/auditoria.md](docs/auditoria.md)** — auditorías de estabilidad (F1–F9) + guía para la versión de producción.
 - **[docs/deploy-pi.md](docs/deploy-pi.md)** — cómo desplegar la web y compilar/instalar el APK.
