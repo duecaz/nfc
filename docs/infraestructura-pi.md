@@ -35,6 +35,15 @@
 | `nfc_kiosk` (Flask) | **8200** | Web del kiosko (gunicorn 3×8) | `~/docker/kiosk/` |
 | `cloudflared` | — | Túnel | `~/docker/cloudflared/` |
 
+**Discos (Pi actual):**
+- **microSD** = arranque (`/`) + `/home/duecaz` (configs docker, `kiosk.db`, `~/backups`).
+- **SSD M.2** = `/mnt/datos` (archivos de Nextcloud + su base SQLite — lo pesado).
+- El backup vive en la microSD → **cross-disk** respecto a los archivos de NC (SSD).
+  Protege contra falla de la SSD ✅. Punto débil: la microSD (OS+backups) es propensa
+  a fallar → conviene una copia offsite (USB/PC) — regla 3-2-1.
+- **Pi NUEVA (producción)**: arrancará desde **M.2 (NVMe)**. Si OS+datos comparten el
+  M.2, el backup **debe** ir a otro medio (USB dedicado o PC/NAS/cloud), no al mismo M.2.
+
 **Datos persistentes (SSD en `/mnt/datos`):**
 - Kiosko: `~/docker/kiosk/data/kiosk.db` (SQLite: tarjetas/paneles/config) + `~/docker/kiosk/.env`
 - Nextcloud (confirmado con `docker inspect`):
@@ -116,4 +125,6 @@ Deploy completo: ver [`deploy-pi.md`](deploy-pi.md). Menú PS1 de la PC: opcione
 - [x] ~~Versión del OS~~ → Debian 13 (trixie), kernel 6.18
 - [ ] Credenciales: NPM admin (puerto 81), cuenta Cloudflare, clave SSH
 - [ ] Instalar `sqlite3` en la Pi y activar `tools/backup-pi.sh` + cron (F3) — ver deploy-pi.md
-- [ ] Confirmar de qué disco arranca la Pi (¿SSD o microSD?) para elegir dónde guardar el backup
+- [x] ~~Disco de arranque~~ → **microSD** (datos NC en SSD /mnt/datos); backup en microSD = cross-disk ✅
+- [ ] (Opcional) Copia offsite del backup a PC/USB (la microSD es propensa a fallar)
+- [ ] Pi nueva: arranca de M.2 → planificar backup a otro medio
