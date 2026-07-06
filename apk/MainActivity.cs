@@ -31,9 +31,6 @@ public class MainActivity : Activity
     private const int    FileChooserCode = 1001;
     // F5: debe coincidir con PANEL_SECRET del .env de la Pi.
     private const string PanelSecret    = "lanube-panel-2026";
-    // Lock Task (kiosko bloqueado): activar SOLO con MDM device-owner + whitelist
-    // de las apps de archivos; si no, rompe subir/abrir archivos. Ver docs/auditoria.md.
-    private const bool   KioskLock      = false;
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
@@ -255,13 +252,6 @@ public class MainActivity : Activity
     protected override void OnResume()
     {
         base.OnResume();
-
-        // Kiosko bloqueado (opt-in; requiere MDM device-owner para ser inviolable).
-        if (KioskLock)
-        {
-            try { StartLockTask(); }
-            catch (Exception ex) { Android.Util.Log.Warn(LogTag, "LockTask: " + ex.Message); }
-        }
 
         // Standard Android NFC (USB readers, regular phones/tablets)
         if (nfcAdapter != null)

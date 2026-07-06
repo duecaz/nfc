@@ -1,8 +1,7 @@
 # Lectura NFC en el panel Amlogic/Rockchip via `droidlogic.jar`
 
 > Documentación de cómo se lee la tarjeta NFC del panel desde **.NET (Visual
-> Studio)** y desde **Android Studio (Kotlin)**, por qué funciona, y qué más
-> ofrece `droidlogic.jar` (incluida la opción de **bloqueo de hardware**).
+> Studio)** y desde **Android Studio (Kotlin)**, y por qué funciona.
 
 ---
 
@@ -102,9 +101,9 @@ NfcKit.Register(uid => RunOnUiThread(() =>
 NfcKit.StartReadJob();
 ```
 
-> Por lo tanto, **"cambiar de sesión" y "bloquear equipo" son lógica de la WEB**
-> (`app.py` / `index.html`), disparada por la función JS `authenticate(uid)`.
-> `droidlogic.jar` **solo** se usa para leer la tarjeta. (ver §7 para mejorar el bloqueo).
+> Por lo tanto, **"cambiar de sesión" es lógica de la WEB** (`app.py` /
+> `index.html`), disparada por la función JS `authenticate(uid)`.
+> `droidlogic.jar` **solo** se usa para leer la tarjeta.
 
 ---
 
@@ -132,39 +131,7 @@ adb shell ps -A | grep -iE "dazzle|tvserver|droidlogic"
 
 ---
 
-## 7. Mejorar "bloquear equipo" (lo que no funciona bien)
-
-El JAR expone **637 miembros**. Para un bloqueo más sólido que un overlay web,
-hay métodos de **hardware** (firmas reales de `javap`):
-
-| Método | Para qué sirve |
-|---|---|
-| `SetBacklight_Switch(int)` / `GetBacklight_Switch()` | Enciende/apaga el **backlight** de la pantalla |
-| `setBlackoutEnable(int, int)` / `getBlackoutEnable()` | **Pantalla en negro** (blackout) por hardware |
-| `FactorySet_backlight_onoff(int)` | Backlight on/off (vía fábrica) |
-| `SetAudioMuteForTv(int)` | Silenciar audio |
-| `SSMSaveStandbyMode(int)` / MCU `MCU_POWER_MODE_STANDBY` | Modo standby del MCU |
-
-### Opciones recomendadas para el bloqueo (de más simple a más robusta)
-
-1. **Overlay nativo en el kiosko (.NET)** — una `Activity`/vista a pantalla
-   completa por encima del WebView, que **solo se quita pasando una tarjeta
-   válida**. Es lo más controlable y no depende del navegador. *(recomendado)*
-2. **Screen pinning / Lock Task Mode** (`startLockTask()`) — modo kiosko de
-   Android: impide salir de la app. Ideal para colegio.
-3. **Blackout por hardware** con `setBlackoutEnable(1, …)` o
-   `SetBacklight_Switch(0)` vía el mismo `NfcBridge` (apaga físicamente la
-   imagen). Crudo pero efectivo como complemento del overlay.
-4. **DevicePolicyManager.lockNow()** — bloquea a la pantalla de bloqueo de
-   Android (requiere registrar la app como *device admin*).
-
-> Sugerencia: combinar **1 + 2** (overlay + lock task) para que sea inviolable
-> por el usuario, y opcionalmente **3** si se quiere apagar la pantalla al
-> bloquear. La acción se dispara con el mismo UID NFC que ya leemos.
-
----
-
-## 8. Checklist de build (.NET nfc-test)
+## 7. Checklist de build (.NET nfc-test)
 ```powershell
 git pull origin claude/clever-fermat-6852kl
 Remove-Item android\nfc-test\obj -Recurse -Force -ErrorAction SilentlyContinue

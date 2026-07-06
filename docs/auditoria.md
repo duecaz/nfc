@@ -45,7 +45,7 @@ sino **Nextcloud + la Pi** (ver §4).
 | # | Tema | Plan |
 |---|---|---|
 | 8 | Actualizar APK panel por panel. | Se usará el **DMS/MDM** para desplegar el APK (ver §6). |
-| 9 | Kiosko no bloqueado / sin auto-reinicio. | ✅ **Auto-reinicio ante crash** implementado (v9). Lock Task = *hook* opt-in; bloqueo real vía MDM (ver §6). |
+| 9 | Kiosko no bloqueado / sin auto-reinicio. | ✅ **Auto-reinicio ante crash** implementado (v9). El bloqueo del kiosko se difiere por completo al **MDM** (device-owner) en producción; no hay hook de Lock Task en la app (ver §6). |
 | 10 | Sin monitoreo central de paneles. | ✅ **Heartbeat** implementado: el APK pinguea `/panel-ping` c/5 min; estado en `/admin/panels`. |
 | 11 | `users.json` como “BD”. | Pocos al inicio, OK. Producción → SQLite/Postgres. |
 
@@ -136,11 +136,12 @@ a todos. El MDM también fija versión y evita drift.
 - **Auto-reinicio ante crash** ✅: `MainActivity` engancha las excepciones no
   controladas y **relanza el kiosko en ~1.5 s** vía `AlarmManager` (método
   `ScheduleRestart`). Una caída ya no deja el panel muerto.
-- **Lock Task Mode**: hay un *hook* (`KioskLock`, **apagado por defecto**). El
-  lock-task estricto **bloquea abrir/subir archivos** (Nextcloud usa apps
-  externas), así que el bloqueo real se hace con el **MDM** (device-owner +
-  `setLockTaskPackages` incluyendo las apps de archivos). Con MDM se activa
-  `KioskLock=true` sin romper nada.
+- **Bloqueo del kiosko**: **no hay hook de Lock Task en la app** (se quitó — el
+  lock-task estricto **bloquea abrir/subir archivos**, ya que Nextcloud usa apps
+  externas). El bloqueo del kiosko en producción se hace **solo con el MDM**
+  (device-owner + `setLockTaskPackages` incluyendo las apps de archivos), donde
+  se puede activar sin romper nada. La app en sí queda libre: se puede salir y
+  desinstalar con normalidad.
 
 ### Monitoreo central (#10) — implementado (v24, bajo demanda)
 - **Heartbeat propio** ✅: cada panel hace `POST /panel-ping` con su **id**
