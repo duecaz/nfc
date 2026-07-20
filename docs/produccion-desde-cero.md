@@ -125,6 +125,17 @@ UPS + internet redundante o un plan de contingencia.
 - ❌ Poll NFC a 50 ms (pierde la 1ª lectura). → 100 ms.
 - ❌ id de panel = ANDROID_ID (clonable de fábrica, F7). → MAC.
 - ❌ Tokens en texto plano en servidor público. → Cifrar en reposo.
+- ❌ **Repo con secretos Y público** (el prototipo quedó **público** con
+  `docs/infraestructura-pi.md` + `PanelSecret` hardcodeado en el APK → fuga real, F10).
+  → **Repo privado desde el día 1** y **secretos NUNCA en el repo ni en el código**
+  (van a `.env` / gestor de secretos); si alguna vez se filtran, **rotar todo**.
+- ❌ **GitHub Pages desde una carpeta con secretos**: Pages publica esa carpeta como
+  web **pública aunque el repo sea privado** (repo privado ≠ sitio privado; solo
+  Enterprise Cloud restringe el acceso). → Publicar solo una carpeta sin credenciales.
+  En plan Free, un repo privado **no puede** servir Pages.
+- ❌ **Hook de Lock Task dentro del APK** (parecía anti-desinstalación; se quitó del
+  prototipo). → El bloqueo del kiosko va **solo por MDM** (device-owner), no cableado
+  en la app; el equipo se puede salir/desinstalar con normalidad.
 
 ---
 

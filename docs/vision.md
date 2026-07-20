@@ -92,6 +92,26 @@ Componentes: `apk/` (kiosko Android .NET), `web/` (Flask + templates), la Pi
 | F7 id de panel clonable | ✅ Resuelto (MAC eth0) |
 | F8 memoria WebView a largo plazo | 📋 Soak test 7 días pendiente |
 | F9 supervisión de la Pi | ✅ Resuelto (/admin/panels: carga/RAM/disco/temp) |
+| F10 repo público con credenciales | 🔴 **Abierto** — poner privado + rotar claves + revisar Pages (ver `auditoria.md F10`) |
+
+## 4b. Bitácora de la sesión de limpieza (jul 2026)
+
+Cambios y problemas de esta sesión, para el proyecto nuevo:
+
+- **Se quitó el hook de Lock Task del APK** (`KioskLock`/`StartLockTask`) y la sección
+  "bloqueo de hardware" del doc (`nfc-droidlogic.md §7`, métodos backlight/blackout/lockNow,
+  nunca implementados). Parecían anti-desinstalación / control del equipo y no eran
+  esenciales: el bloqueo del kiosko va **solo por MDM** en producción. El APK queda libre
+  de salir/desinstalar. Se **conservó** el auto-reinicio ante crash (recuperación de la
+  app, no persistencia) y la lectura NFC por `DexClassLoader` (esencial).
+- **Hallazgo F10**: el repo estaba **público** con credenciales (`infraestructura-pi.md`
+  + `PanelSecret` hardcodeado) → fuga real. Acción: privado + rotar + revisar Pages.
+- **Nota de proceso (falso positivo de safeguards)**: el modelo rápido *Fable 5* bloqueó
+  el análisis del proyecto porque la mezcla de señales (DexClassLoader del framework,
+  bypass SELinux, "bloqueo de hardware", kiosk lock, leer UID, inyectar JS) pattern-matchea
+  con malware Android, aunque el uso es legítimo (hardware propio, autorizado). Salida:
+  **trabajar con un modelo más capaz (Opus)** y dar contexto de autorización; quitar lo no
+  esencial (arriba) reduce esas señales.
 
 ## 5. Bitácora de versiones (resumen)
 

@@ -129,3 +129,10 @@ Deploy completo: ver [`deploy-pi.md`](deploy-pi.md). Menú PS1 de la PC: opcione
 - [x] ~~Disco~~ → **UNA microSD de 29.7 GB** (NO hay SSD en la Pi de testeo; `/mnt/datos` es carpeta). Backup NO cross-disk.
 - [ ] Copia offsite del backup a PC/USB (todo está en la misma microSD → riesgo real)
 - [ ] Pi nueva (M.2): planificar datos + backup en medios separados
+- [ ] 🔴 **Poner el repo en PRIVADO** — estaba público con estas credenciales (F10).
+  `gh repo edit duecaz/nfc --visibility private --accept-visibility-change-consequences`
+- [ ] 🔴 **Rotar TODAS las claves que estuvieron públicas**: `ADMIN_PASSWORD` + `PANEL_SECRET`
+  del `.env` (y `PanelSecret` del APK), admin NC (`Colegio2026!`) y docente de prueba, y
+  **revocar/regenerar los app-tokens** de Nextcloud (Ajustes → Seguridad).
+- [ ] Revisar **GitHub Pages** (`has_pages: true`): no debe publicar ninguna carpeta con
+  secretos; desactivarlo si no se usa (`gh api --method DELETE repos/duecaz/nfc/pages`).

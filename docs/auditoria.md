@@ -200,6 +200,15 @@ Lo que **funcionó bien** y hay que conservar:
 | **F7** | 🟡 | Id de panel = `ANDROID_ID`; en 50 paneles clonados de fábrica puede repetirse → 2 paneles = 1 fila del inventario. | Concatenar con serial (`Build.SERIAL`/getprop). |
 | **F8** | 🟡 | WebView semanas encendido: memoria sin medir a largo plazo. | Soak test 7 días en piloto + reinicio nocturno 3 am. |
 | **F9** | 🟡 | Rate-limit `memory://` aproximado entre workers. | Aceptado en prototipo; producción → Redis. |
+| **F10** | 🔴 | **El repo estaba PÚBLICO** (`"visibility": "public"`) conteniendo credenciales reales: `docs/infraestructura-pi.md` (`ADMIN_PASSWORD`, `PANEL_SECRET`, admin NC `Colegio2026!`) y `PanelSecret` **hardcodeado** en `apk/MainActivity.cs`. Además **GitHub Pages activo** (`has_pages: true`) sirviendo contenido del repo. Cualquiera pudo leer/clonar/indexar esas claves → **deben considerarse comprometidas**. | 1) Repo a **privado** (`gh repo edit duecaz/nfc --visibility private`). 2) **Rotar TODO** lo expuesto (ver lista abajo). 3) Revisar/desactivar Pages si publica una carpeta con secretos. 4) En v2: repo privado día 1 + secretos fuera del repo/código. |
+
+> **F10 — detalle (para no repetirlo en v2).** Repo privado **≠** sitio de Pages privado:
+> Pages publica la carpeta fuente como web **pública** aunque el repo sea privado (solo
+> Enterprise Cloud restringe el acceso), y en plan Free un repo privado no puede servir
+> Pages. Nunca publicar Pages desde una carpeta que contenga credenciales. **Claves a
+> rotar** (estuvieron públicas): `ADMIN_PASSWORD` y `PANEL_SECRET` del `.env` de la Pi +
+> `PanelSecret` del APK (deben coincidir), password admin de Nextcloud y del docente de
+> prueba, y **revocar/regenerar los app-tokens** de Nextcloud (Ajustes → Seguridad).
 
 ### Números a 50 paneles
 

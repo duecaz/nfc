@@ -17,7 +17,7 @@ de acceso vive asociado a la tarjeta. Desde casa entran por navegador. Todo es
 |---|---|
 | Web (Flask) | **v25** · datos en **SQLite** `web/data/kiosk.db` (ya NO usa users.json) |
 | APK (.NET) | **v11** · `uno.lanube.kiosk` · lee NFC por droidlogic |
-| Repo | `duecaz/nfc` (privado), **rama única `main`** |
+| Repo | `duecaz/nfc`, **rama única `main`** · ⚠️ **estaba PÚBLICO con credenciales — pasar a privado + rotar claves (F10)** |
 | Servidor | Pi 5 en `192.168.1.50` · Nextcloud (SQLite) + Flask + nginx + cloudflared, en Docker |
 | Panel de pruebas | `192.168.1.57:5555` (adb) |
 | Backup (F3) | ✅ `tools/backup-pi.sh` + cron 3am andando |
@@ -58,7 +58,10 @@ Estructura del repo: `web/` (Flask) · `apk/` (Android .NET) · `test/` (diagnó
 
 ## Pendiente inmediato (siguiente chat)
 
-1. Copia **offsite** del backup (hoy todo está en la misma microSD — riesgo real).
-2. Completar credenciales que faltan en `infraestructura-pi.md` (NPM, Cloudflare, SSH).
-3. Producción desde 0: hosting definitivo, cifrar app-tokens, MDM, evaluar PocketBase
+1. 🔴 **Seguridad (F10)**: el repo estaba **público con credenciales** → ponerlo
+   **privado** + **rotar** todas las claves expuestas + revisar Pages. Detalle y
+   comandos en `docs/infraestructura-pi.md §9` y `docs/auditoria.md F10`.
+2. Copia **offsite** del backup (hoy todo está en la misma microSD — riesgo real).
+3. Completar credenciales que faltan en `infraestructura-pi.md` (NPM, Cloudflare, SSH).
+4. Producción desde 0: hosting definitivo, cifrar app-tokens, MDM, evaluar PocketBase
    (ver `docs/vision.md` §6 y `docs/auditoria.md`).
